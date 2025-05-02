@@ -15,9 +15,9 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def run_binary_vs_all(model_selection="paper", save_results=True):
+def run_binary_vs_ref(model_selection="paper", save_results=True):
     """
-    Run binary classification: All faulty vs all normal samples for each class value.
+    Run binary classification: All normal (reference) vs all faulty samples for each class value.
 
     Data was collected in alternating batches of 5 reference (OK) and 5 faulty (NOK) samples
     for each error class, with a total of 100 reference and 100 faulty samples per class.
@@ -36,13 +36,13 @@ def run_binary_vs_all(model_selection="paper", save_results=True):
     DataFrame with classification results
     """
     logger.info(
-        f"Running binary classification: All faulty vs all normal (model selection: {model_selection})"
+        f"Running binary classification: Reference vs faulty (model selection: {model_selection})"
     )
 
     # Create results directory if saving results
     if save_results:
-        ensure_directory("results/binary/vs_all")
-        ensure_directory("results/binary/vs_all/images")
+        ensure_directory("results/binary/vs_ref")
+        ensure_directory("results/binary/vs_ref/images")
         logger.debug("Created results directories")
 
     # Load data
@@ -80,7 +80,7 @@ def run_binary_vs_all(model_selection="paper", save_results=True):
             )
             continue
 
-        # Get indices of normal and faulty samples within this class
+        # Get indices of normal (reference) and faulty samples within this class
         normal_indices = np.where(filtered_label_values == "normal")[0]
         faulty_indices = np.where(filtered_label_values != "normal")[0]
 
@@ -93,10 +93,14 @@ def run_binary_vs_all(model_selection="paper", save_results=True):
 
         # Use all samples (no subsampling)
         logger.info(
-            f"Using {len(normal_indices)} normal and {len(faulty_indices)} faulty samples"
+            f"Using {len(normal_indices)} reference and {len(faulty_indices)} faulty samples"
         )
 
-        # Combine indices (all normal + all faulty)
+        # Calculate class weights due to potential imbalance
+        class_ratio = len(normal_indices) / len(faulty_indices)
+        logger.info(f"Class imbalance ratio (reference:faulty): {class_ratio:.2f}:1")
+
+        # Combine indices (all samples)
         all_indices = np.concatenate([normal_indices, faulty_indices])
         x_values = filtered_torque_values[all_indices]
 
@@ -111,10 +115,6 @@ def run_binary_vs_all(model_selection="paper", save_results=True):
         # Also prepare flattened format for sklearn models
         # Reshape the 3D array to 2D (n_samples, n_features)
         X_sklearn = x_values.reshape(x_values.shape[0], -1)
-
-        # Calculate class weights due to potential imbalance
-        class_ratio = len(normal_indices) / len(faulty_indices)
-        logger.info(f"Class imbalance ratio (normal:faulty): {class_ratio:.2f}:1")
 
         # Split into train/test sets
         logger.debug("Splitting data into train/test sets")
@@ -163,7 +163,7 @@ def run_binary_vs_all(model_selection="paper", save_results=True):
                     "precision": report.get("1", {}).get("precision", 0),
                     "recall": report.get("1", {}).get("recall", 0),
                     "f1-score": report.get("1", {}).get("f1-score", 0),
-                    "normal_samples": len(normal_indices),
+                    "reference_samples": len(normal_indices),
                     "faulty_samples": len(faulty_indices),
                     "imbalance_ratio": class_ratio,
                 }
@@ -178,7 +178,7 @@ def run_binary_vs_all(model_selection="paper", save_results=True):
 
                 # Generate confusion matrix visualization
                 if save_results:
-                    save_path = f"results/binary/vs_all/images/confusion_matrix_{class_value}_{model_name}.png"
+                    save_path = f"results/binary/vs_ref/images/confusion_matrix_{class_value}_{model_name}.png"
                     plot_confusion_matrix(
                         y_test, y_pred, class_value, model_name, save_path
                     )
@@ -218,7 +218,7 @@ def run_binary_vs_all(model_selection="paper", save_results=True):
     # Save results if requested
     if save_results and not results_df.empty:
         logger.info("Saving results and visualizations")
-        save_results_with_plots(results_df, "results/binary", "vs_all")
+        save_results_with_plots(results_df, "results/binary", "vs_ref")
         logger.info("Results saved successfully")
 
     return results_df
@@ -226,6 +226,6 @@ def run_binary_vs_all(model_selection="paper", save_results=True):
 
 if __name__ == "__main__":
     # Run the experiment
-    logger.info("Starting experiment run_binary_vs_all")
-    results = run_binary_vs_all(model_selection="paper", save_results=True)
+    logger.info("Starting experiment run_binary_vs_ref")
+    results = run_binary_vs_ref(model_selection="paper", save_results=True)
     logger.info("Experiment completed")

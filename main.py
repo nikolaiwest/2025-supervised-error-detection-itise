@@ -35,7 +35,7 @@ def main():
         print("\n=== BINARY CLASSIFICATION EXPERIMENTS ===\n")
 
         # Import only when needed
-        from src.analysis.binary.vs_50 import run_binary_vs_50
+        from src.analysis.binary.vs_ref import run_binary_vs_50
         from src.analysis.binary.vs_all import run_binary_vs_all
 
         print("\n1. 50 normal vs 50 faulty:")
