@@ -1,5 +1,6 @@
 # Project
-data/
+/data/
+!/src/data/ 
 mlflow/
 tests/
 results/**/*.png

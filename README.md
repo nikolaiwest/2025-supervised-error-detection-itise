@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-This repository contains the code and experiments for our paper "Multi-class Error Detection in Industrial Screw Driving Operations Using Machine Learning", to be presented at ITISE 2025 (11th International Conference on Time Series and Forecasting) in Gran Canaria, Spain.
+This repository contains the code and results for our paper "Multi-class Error Detection in Industrial Screw Driving Operations Using Machine Learning". The paper will be presented at ITISE 2025 (11th International Conference on Time Series and Forecasting) in Gran Canaria, Spain.
 
 ## Abstract
 
@@ -50,7 +50,7 @@ Recent advances in machine learning have significantly improved anomaly detectio
    pip install -r requirements.txt
    ```
 
-4. Download the dataset (requires `pyscrew` package):
+If you just want to have a look at the dataset, you can download it using our `pyscrew` package:
    ```python
    import pyscrew
    data = pyscrew.get_data("s04")
@@ -111,6 +111,7 @@ If you use this code or dataset in your research, please cite our paper:
   address={Gran Canaria, Spain}
 }
 ```
+*Will be updated with the conference proceedings.*
 
 ## License
 
@@ -118,5 +119,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- This work was supported by [Your Institution/Grant Information]
-- We thank the PyScrew project for providing the dataset
+These datasets were collected and prepared by:
+- [RIF Institute for Research and Transfer e.V.](https://www.rif-ev.de/)
+- [Technical University Dortmund](https://www.tu-dortmund.de/), [Institute for Production Systems](https://ips.mb.tu-dortmund.de/)
+- Feel free to contact us directly for further questions: [Nikolai West (nikolai.west@tu-dortmund.de)](nikolai.west@tu-dortmund.de)
+
+The preparation and provision of the research was supported by:
+
+| Organization | Role | Logo |
+|-------------|------|------|
+| German Ministry of Education and Research (BMBF) | Funding | <img src="https://vdivde-it.de/system/files/styles/vdivde_logo_vdivde_desktop_1_5x/private/image/BMBF_englisch.jpg?itok=6FdVWG45" alt="BMBF logo" height="150"> |
+| European Union's "NextGenerationEU" | Funding | <img src="https://www.bundesfinanzministerium.de/Content/DE/Bilder/Logos/nextgenerationeu.jpg?__blob=square&v=1" alt="NextGenerationEU logo" height="150"> |
+| VDIVDE | Program Support | <img src="https://vdivde-it.de/themes/custom/vdivde/images/vdi-vde-it_og-image.png" alt="Projekttraeger VDIVDE logo" height="150"> |
+
+This research is part of the funding program ["Data competencies for early career researchers"](https://www.bmbf.de/DE/Forschung/Wissenschaftssystem/Forschungsdaten/DatenkompetenzenInDerWissenschaft/datenkompetenzeninderwissenschaft_node.html). 
+
+More information regarding the research project is available at [prodata-projekt.de](https://prodata-projekt.de/).
