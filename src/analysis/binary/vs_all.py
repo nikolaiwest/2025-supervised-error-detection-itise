@@ -1,14 +1,19 @@
+"""
+Binary classification: 50 faulty vs all normal samples for each class value.
+Updated version using the plots module.
+"""
+
 import os
 from datetime import datetime
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import seaborn as sns
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
 from sktime.datatypes._panel._convert import from_2d_array_to_nested
 
+from src.plots.confusion_matrix import plot_confusion_matrix
+from src.plots.utils import ensure_directory, save_results_with_plots
 from src.data.loader import load_data
 from src.models.classifiers import get_model_dict
 
@@ -34,7 +39,8 @@ def run_binary_vs_all(model_selection="paper", save_results=True):
 
     # Create results directory if saving results
     if save_results:
-        os.makedirs("results/binary/50vsAll", exist_ok=True)
+        ensure_directory("results/binary/50vsAll")
+        ensure_directory("results/binary/50vsAll/images")
 
     # Load data
     torque_values, class_values, label_values = load_data()
@@ -105,8 +111,6 @@ def run_binary_vs_all(model_selection="paper", save_results=True):
         print(f"Class imbalance ratio (normal:faulty): {class_ratio:.2f}:1")
 
         # Split into train/test
-        # Note: In future releases, we'll implement cross-validation here
-        # for more robust model evaluation
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, stratify=y, random_state=42
         )
@@ -142,24 +146,10 @@ def run_binary_vs_all(model_selection="paper", save_results=True):
 
                 # Generate confusion matrix visualization
                 if save_results:
-                    cm = confusion_matrix(y_test, y_pred)
-                    plt.figure(figsize=(8, 6))
-                    sns.heatmap(
-                        cm,
-                        annot=True,
-                        fmt="d",
-                        cmap="Blues",
-                        xticklabels=["Normal", "Faulty"],
-                        yticklabels=["Normal", "Faulty"],
+                    save_path = f"results/binary/50vsAll/images/confusion_matrix_{class_value}_{model_name}.png"
+                    plot_confusion_matrix(
+                        y_test, y_pred, class_value, model_name, save_path
                     )
-                    plt.title(f"Confusion Matrix - {class_value} - {model_name}")
-                    plt.xlabel("Predicted")
-                    plt.ylabel("True")
-                    plt.tight_layout()
-                    plt.savefig(
-                        f"results/binary/50vsAll/images/confusion_matrix_{class_value}_{model_name}.png"
-                    )
-                    plt.close()
 
                 print(f"✓ {model_name} on {class_value} completed successfully.")
             except Exception as e:
@@ -170,43 +160,12 @@ def run_binary_vs_all(model_selection="paper", save_results=True):
 
     # Save results if requested
     if save_results and not results_df.empty:
-        results_df.to_csv("results/binary/50vsAll/results.csv", index=False)
-
-        # Create summary visualization per model
-        for model_name in results_df["model"].unique():
-            model_results = results_df[results_df["model"] == model_name]
-
-            plt.figure(figsize=(10, 6))
-            plt.bar(model_results["class"], model_results["f1-score"])
-            plt.title(f"F1-Score by Class - {model_name}")
-            plt.xlabel("Class")
-            plt.ylabel("F1-Score")
-            plt.ylim(0, 1)
-            plt.xticks(rotation=90)
-            plt.tight_layout()
-            plt.savefig(f"results/binary/50vsAll/images/f1_by_class_{model_name}.png")
-            plt.close()
-
-        # Create overall metrics comparison
-        plt.figure(figsize=(12, 8))
-        model_metrics = (
-            results_df.groupby("model")[["accuracy", "precision", "recall", "f1-score"]]
-            .mean()
-            .reset_index()
-        )
-
-        metrics = ["accuracy", "precision", "recall", "f1-score"]
-        for i, metric in enumerate(metrics):
-            plt.subplot(2, 2, i + 1)
-            plt.bar(model_metrics["model"], model_metrics[metric])
-            plt.title(f"Average {metric}")
-            plt.ylim(0, 1)
-            plt.xticks(rotation=45)
-
-        plt.tight_layout()
-        plt.savefig("results/binary/50vsAll/images/overall_metrics_comparison.png")
-        plt.close()
-
-        print(f"Results saved to results/binary/50vsAll/")
+        save_results_with_plots(results_df, "results/binary", "50vsAll")
 
     return results_df
+
+
+if __name__ == "__main__":
+    # Run the experiment
+    results = run_binary_vs_all(model_selection="paper", save_results=True)
+    print("Experiment completed.")
