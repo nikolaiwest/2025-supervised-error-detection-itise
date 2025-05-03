@@ -4,6 +4,8 @@
 mlflow/
 tests/
 results/**/*.png
+# Temp: dont update csv results with every run...
+results/**/*.csv 
 notes.txt
 
 # Byte-compiled / optimized / DLL files

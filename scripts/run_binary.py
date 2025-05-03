@@ -1,14 +1,26 @@
+#!/usr/bin/env python3
 """
-Script to run binary classification experiments for the PyScrew project.
+Binary Classification Experiment Runner for PyScrew Project
+==========================================================
 
-This script runs both binary classification approaches:
-1. Reference vs Faulty (vs_ref): All normal/reference samples vs all faulty samples
-2. All vs All (vs_all): All samples compared against each other
+This script executes comprehensive binary classification experiments for the
+PyScrew project using time series classification models. The script supports
+two distinct experimental approaches:
+
+1. Reference vs Faulty (vs_ref):
+   Compares normal/reference samples against all types of faulty samples,
+   treating this as a binary classification problem.
+
+2. All vs All (vs_all):
+   Performs binary classification between each class pair, creating a
+   comprehensive comparison matrix of all sample types.
+
+Results are saved as CSV files and visualized through multiple plots to
+facilitate analysis and interpretation.
 
 Usage:
     python scripts/run_binary.py [--fast|--paper|--full]
 """
-
 import os
 import sys
 from datetime import datetime
@@ -16,39 +28,90 @@ from datetime import datetime
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# Import project modules
 from src.analysis.binary import run_binary_vs_all, run_binary_vs_ref
+from src.plots import plot_classification_results
 from src.utils.logger import get_logger
 
 # Configure logger
 logger = get_logger(__name__)
 
-
 if __name__ == "__main__":
-
     # Set model selection
-    model_selection = "fast"  # Default
+    model_selection = "paper"
 
-    # Log experiment start
+    # Log experiment configuration
     start_time = datetime.now()
-    logger.info(f"Starting binary classification ('{model_selection}')")
+    logger.info("=" * 80)
+    logger.info(f"Starting binary classification [Config: '{model_selection}' models]")
+    logger.info(f"Timestamp: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("=" * 80)
 
-    # Run experiments
-    logger.info("Running reference vs faulty experiment...")
+    # Create result directories if they don't exist
+    os.makedirs("results/binary/vs_ref/images", exist_ok=True)
+    os.makedirs("results/binary/vs_all/images", exist_ok=True)
+
+    # =========================================================================
+    # Experiment 1: Reference vs. Faulty (Binary)
+    # =========================================================================
+    logger.info("EXPERIMENT 1: Reference vs Faulty Classification")
+    logger.info("-" * 80)
+
+    # Run the experiment
     vs_ref_results = run_binary_vs_ref(model_selection=model_selection)
+    logger.info(
+        f"Reference vs Faulty experiment completed with {len(vs_ref_results) if vs_ref_results is not None else 0} model evaluations"
+    )
 
-    logger.info("Running all vs all experiment...")
+    # Generate and save visualizations
+    logger.info("Generating visualizations for Reference vs Faulty experiment...")
+    plot_classification_results(
+        csv_path="results/binary/vs_ref/results.csv",
+        output_dir="results/binary/vs_ref/images",
+    )
+    logger.info("Visualizations saved to results/binary/vs_ref/images/")
+
+    # =========================================================================
+    # Experiment 2: All vs. All (Multi-Binary)
+    # =========================================================================
+    logger.info("=" * 80)
+    logger.info("EXPERIMENT 2: All vs All Classification")
+    logger.info("-" * 80)
+
+    # Run the experiment
     vs_all_results = run_binary_vs_all(model_selection=model_selection)
+    logger.info(
+        f"All vs All experiment completed with {len(vs_all_results) if vs_all_results is not None else 0} model evaluations"
+    )
 
-    # Log experiment completion
+    # Generate and save visualizations
+    logger.info("Generating visualizations for All vs All experiment...")
+    plot_classification_results(
+        csv_path="results/binary/vs_all/results.csv",
+        output_dir="results/binary/vs_all/images",
+    )
+    logger.info("Visualizations saved to results/binary/vs_all/images/")
+
+    # =========================================================================
+    # Summary and Completion
+    # =========================================================================
+    # Calculate and log timing information
     end_time = datetime.now()
     duration = end_time - start_time
-    logger.info(f"All experiments completed in {duration}")
+    hours, remainder = divmod(duration.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
 
-    # Log a brief summary
+    logger.info("=" * 80)
+    logger.info("SUMMARY")
+    logger.info("-" * 80)
+    logger.info(f"All experiments completed in {hours}h {minutes}m {seconds}s")
     logger.info(
-        f"Completed {len(vs_ref_results) if vs_ref_results is not None else 0} evaluations in vs_ref experiment"
+        f"Reference vs Faulty: {len(vs_ref_results) if vs_ref_results is not None else 0} evaluations"
     )
     logger.info(
-        f"Completed {len(vs_all_results) if vs_all_results is not None else 0} evaluations in vs_all experiment"
+        f"All vs All: {len(vs_all_results) if vs_all_results is not None else 0} evaluations"
     )
-    logger.info("Done.")
+    logger.info(
+        "All results and visualizations available in 'results/binary/' directory"
+    )
+    logger.info("Binary classification experiments completed successfully.")

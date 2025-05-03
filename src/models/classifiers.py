@@ -1,10 +1,4 @@
-"""
-Model definitions for time series classification tasks.
-Provides a variety of models from both sklearn and sktime libraries.
-"""
-
-
-def get_model_dict(selection="paper"):
+def get_model_dict(selection="paper", grid_search=False):
     """
     Return dictionary of classifiers based on selection.
 
@@ -14,117 +8,85 @@ def get_model_dict(selection="paper"):
         "fast" - Fastest models for quick testing and development (4 models)
         "paper" - Balanced selection for publication (8 models)
         "full" - All available models (20 models)
+        "sktime" - Only models from the sktime library
+        "sklearn" - Only models from the scikit-learn library
+        "grid" - Models configured for hyperparameter tuning
+    grid_search : bool, default=False
+        If True, return models with parameter grids for hyperparameter tuning
 
     Returns:
     --------
-    Dictionary of initialized model instances
+    Dictionary of initialized model instances or (model, param_grid) tuples for grid search
     """
-    # Import sktime models
-    from sktime.classification.interval_based import TimeSeriesForestClassifier
-    from sktime.classification.distance_based import KNeighborsTimeSeriesClassifier
-    from sktime.classification.dictionary_based import (
-        IndividualBOSS,
-        BOSSEnsemble,
-        WEASEL,
-    )
-    from sktime.classification.shapelet_based import ShapeletTransformClassifier
-    from sktime.classification.deep_learning import CNNClassifier
-    from sktime.classification.feature_based import FreshPRINCE
-    from sktime.classification.ensemble import ComposableTimeSeriesForestClassifier
-    from sktime.classification.hybrid import HIVECOTEV2
+    import os
+    from importlib import import_module
 
-    # Import scikit-learn models
-    from sklearn.ensemble import (
-        RandomForestClassifier,
-        GradientBoostingClassifier,
-        AdaBoostClassifier,
-        ExtraTreesClassifier,
-    )
-    from sklearn.neighbors import KNeighborsClassifier
-    from sklearn.tree import DecisionTreeClassifier
-    from sklearn.neural_network import MLPClassifier
-    from sklearn.svm import SVC
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.naive_bayes import GaussianNB
-    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-    from sklearn.ensemble import HistGradientBoostingClassifier
+    import yaml
 
-    # Define fast models for rapid prototyping
-    if selection == "fast":
-        return {
-            # Fast sktime models
-            "TSF-fast": TimeSeriesForestClassifier(n_estimators=10, random_state=42),
-            "KNN-DTW-fast": KNeighborsTimeSeriesClassifier(n_neighbors=1),
-            # Fast sklearn models (without adapter)
-            "RF-fast": RandomForestClassifier(n_estimators=10, random_state=42),
-            "DT-fast": DecisionTreeClassifier(random_state=42),
-        }
+    # Define path to YAML file - adjust as needed for your project structure
+    yaml_path = os.path.join(os.path.dirname(__file__), "classifiers.yml")
 
-    # Define balanced selection for paper
-    elif selection == "paper":
-        return {
-            # sktime models
-            "TSF": TimeSeriesForestClassifier(n_estimators=100, random_state=42),
-            "KNN-DTW": KNeighborsTimeSeriesClassifier(n_neighbors=3),
-            "IndividualBOSS": IndividualBOSS(random_state=42),
-            "WEASEL": WEASEL(random_state=42),
-            # sklearn models (without adapter)
-            "RF": RandomForestClassifier(n_estimators=100, random_state=42),
-            "GBM": GradientBoostingClassifier(n_estimators=100, random_state=42),
-            "SVM": SVC(probability=True, random_state=42),
-            "MLP": MLPClassifier(
-                hidden_layer_sizes=(100, 50), max_iter=500, random_state=42
-            ),
-        }
+    # Load model specifications from YAML file
+    with open(yaml_path, "r") as file:
+        model_specs = yaml.safe_load(file)
 
-    # Define full model suite
-    elif selection == "full":
-        return {
-            # All sktime models
-            "TSF": TimeSeriesForestClassifier(n_estimators=100, random_state=42),
-            "KNN-DTW": KNeighborsTimeSeriesClassifier(n_neighbors=3),
-            "IndividualBOSS": IndividualBOSS(random_state=42),
-            "BOSS": BOSSEnsemble(random_state=42),
-            "WEASEL": WEASEL(random_state=42),
-            "Shapelet": ShapeletTransformClassifier(
-                random_state=42,
-                n_shapelet_samples=100,  # Reduced for speed
-                max_shapelets=20,  # Reduced for speed
-            ),
-            "CNN": CNNClassifier(
-                n_epochs=20,  # Reduced for speed
-                batch_size=16,
-                random_state=42,
-            ),
-            "FreshPRINCE": FreshPRINCE(random_state=42),
-            "CTSF": ComposableTimeSeriesForestClassifier(
-                n_estimators=100, random_state=42
-            ),
-            "HIVECOTE": HIVECOTEV2(
-                random_state=42,
-                n_jobs=1,  # Set based on your available CPU cores
-                stc_params={
-                    "n_shapelet_samples": 100,  # Reduced for speed
-                    "max_shapelets": 20,  # Reduced for speed
-                },
-            ),
-            # All sklearn models (without adapter)
-            "RF": RandomForestClassifier(n_estimators=100, random_state=42),
-            "GBM": GradientBoostingClassifier(n_estimators=100, random_state=42),
-            "AdaBoost": AdaBoostClassifier(n_estimators=100, random_state=42),
-            "ExtraTrees": ExtraTreesClassifier(n_estimators=100, random_state=42),
-            "KNN": KNeighborsClassifier(n_neighbors=5),
-            "DT": DecisionTreeClassifier(random_state=42),
-            "MLP": MLPClassifier(hidden_layer_sizes=(100, 50), random_state=42),
-            "SVM": SVC(probability=True, random_state=42),
-            "LogReg": LogisticRegression(max_iter=1000, random_state=42),
-            "GNB": GaussianNB(),
-            "LDA": LinearDiscriminantAnalysis(),
-            "HistGBM": HistGradientBoostingClassifier(max_iter=100, random_state=42),
-        }
-
-    else:
+    # Validate selection
+    valid_selections = ["fast", "paper", "full", "sktime", "sklearn", "grid"]
+    if selection not in valid_selections:
         raise ValueError(
             f"Unknown model selection: {selection}. "
-            f"Choose from 'fast', 'paper', or 'full'."
+            f"Choose from {', '.join(valid_selections)}."
         )
+
+    # Initialize empty dictionary for models
+    models = {}
+
+    # Process each model based on selection
+    for model_name, model_info in model_specs.items():
+        # Skip models not in the selected set, except for grid search which uses all models
+        if selection != "grid" and selection not in model_info.get("in_sets", []):
+            continue
+
+        # For fast selection, only include models with fast configuration
+        if selection == "fast" and not model_info.get("fast_params"):
+            continue
+
+        # Import the model class
+        module_path = model_info["import_path"]
+        class_name = model_info["class_name"]
+
+        # Use dynamic import to get the model class
+        try:
+            module = import_module(module_path)
+            model_class = getattr(module, class_name)
+        except (ImportError, AttributeError) as e:
+            print(f"Warning: Could not import {class_name} from {module_path}: {e}")
+            continue
+
+        # Determine which parameters to use based on selection
+        if selection == "fast" and "fast_params" in model_info:
+            params = model_info["fast_params"]
+            # Use fast-specific model name if specified
+            display_name = model_info.get("fast_name", f"{model_name}-fast")
+        elif selection == "paper" and "paper_params" in model_info:
+            params = model_info["paper_params"]
+            display_name = model_name
+        else:
+            params = model_info["params"]
+            display_name = model_name
+
+        # If grid search is enabled, return model with param grid
+        if grid_search or selection == "grid":
+            if "param_grid" in model_info:
+                # Initialize model with default parameters
+                model = model_class(**params)
+                # Return model with parameter grid
+                models[display_name] = (model, model_info["param_grid"])
+            else:
+                # Skip models without parameter grid if grid search is requested
+                continue
+        else:
+            # Initialize and return model instance
+            models[display_name] = model_class(**params)
+
+    return models

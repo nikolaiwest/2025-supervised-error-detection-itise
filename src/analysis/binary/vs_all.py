@@ -178,7 +178,7 @@ def run_binary_vs_all(model_selection="paper", save_results=True):
 
                 # Generate confusion matrix visualization
                 if save_results:
-                    save_path = f"results/binary/vs_all/images/confusion_matrix_{class_value}_{model_name}.png"
+                    save_path = f"results/binary/vs_all/images/confusion_matrix/{class_value}_{model_name}.png"
                     plot_confusion_matrix(
                         y_test, y_pred, class_value, model_name, save_path
                     )
