@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Binary Classification Experiment Runner for PyScrew Project
 ==========================================================
@@ -21,6 +20,7 @@ facilitate analysis and interpretation.
 Usage:
     python scripts/run_binary.py [--fast|--paper|--full]
 """
+
 import os
 import sys
 from datetime import datetime
