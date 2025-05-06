@@ -7,8 +7,14 @@ import pandas as pd
 import pyscrew
 from sktime.datatypes._panel._convert import from_2d_array_to_nested
 
+LOADING_CONFIG = {
+    "scenario_id": "s04",
+    "target_length": 2000,
+    "screw_positions": "left",
+}
 
-def load_data(dataset_id="s04"):
+
+def load_data():
     """Load and return the pyscrew dataset.
 
     Parameters:
@@ -20,12 +26,17 @@ def load_data(dataset_id="s04"):
     --------
     tuple: (torque_values, class_values, label_values)
     """
-    data = pyscrew.get_data(dataset_id)  #  screw_positions="left"
-    torque_values = np.array(data["torque values"])
-    class_values = np.array(data["class values"])
-    # TODO: Load information using pyscrew (requires an upate)
-    label_values = np.array(pd.read_csv("data/labels.csv")["scenario_condition"])
-    return torque_values, class_values, label_values
+    data = pyscrew.get_data(
+        LOADING_CONFIG["scenario_id"],
+        screw_positions=LOADING_CONFIG["screw_positions"],
+        target_length=LOADING_CONFIG["target_length"],
+    )
+
+    torque_values = np.array(data["torque_values"])
+    class_values = np.array(data["class_values"])
+    scenario_condition = np.array(data["scenario_condition"])
+
+    return torque_values, class_values, scenario_condition
 
 
 def prepare_binary_dataset(torque_values, label_values, normal_indices, faulty_indices):

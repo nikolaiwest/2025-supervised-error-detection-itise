@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
 from sktime.datatypes._panel._convert import from_2d_array_to_nested
 
@@ -9,6 +8,7 @@ from src.models.classifiers import get_model_dict
 from src.plots.confusion_matrix import plot_confusion_matrix
 from src.plots.utils import ensure_directory, save_results_with_plots
 from src.utils.logger import get_logger
+from src.evaluation import evaluate_model
 
 logger = get_logger(__name__)
 
@@ -34,7 +34,8 @@ def run_binary_vs_ref(model_selection="paper", save_results=True):
     DataFrame with classification results
     """
     logger.info(
-        f"Running binary classification: Reference vs faulty (model selection: {model_selection})"
+        f"Running binary classification:"
+        f"Reference vs faulty (model selection: {model_selection})"
     )
 
     # Create results directory if saving results
@@ -45,7 +46,7 @@ def run_binary_vs_ref(model_selection="paper", save_results=True):
 
     # Load data
     logger.info("Loading data...")
-    torque_values, class_values, label_values = load_data()
+    torque_values, class_values, scenario_condition = load_data()
     logger.debug(
         f"Loaded {len(torque_values)} samples with {len(set(class_values))} classes"
     )
@@ -64,55 +65,49 @@ def run_binary_vs_ref(model_selection="paper", save_results=True):
         # Filter data for this class
         class_mask = class_values == class_value
         filtered_torque_values = torque_values[class_mask]
-        filtered_label_values = label_values[class_mask]
+        filtered_label_values = scenario_condition[class_mask]
 
         # Print class distribution
         unique_labels, counts = np.unique(filtered_label_values, return_counts=True)
-        class_dist = dict(zip(unique_labels, counts))
-        logger.info(f"Class distribution: {class_dist}")
+        class_dist = {str(k): int(v) for k, v in zip(unique_labels, counts)}
+        logger.debug(f"Class distribution: {class_dist}")
 
         # Skip classes with only one label
         if len(unique_labels) < 2:
-            logger.warning(
-                f"Skipping {class_value}: only one label '{unique_labels[0]}' present."
-            )
+            logger.warning(f"Skip {class_value}: only one label '{unique_labels[0]}'.")
             continue
 
         # Get indices of normal (reference) and faulty samples within this class
-        normal_indices = np.where(filtered_label_values == "normal")[0]
-        faulty_indices = np.where(filtered_label_values != "normal")[0]
+        normal_idx = np.where(filtered_label_values == "normal")[0]
+        faulty_idx = np.where(filtered_label_values != "normal")[0]
 
         # Skip if insufficient samples
-        if len(normal_indices) < 1 or len(faulty_indices) < 1:
-            logger.warning(
-                f"Skipping {class_value}: insufficient samples in one or both classes."
-            )
+        if len(normal_idx) < 1 or len(faulty_idx) < 1:
+            logger.warning(f"Skipping {class_value}: insufficient samples in classes.")
             continue
 
         # Use all samples (no subsampling)
         logger.info(
-            f"Using {len(normal_indices)} reference and {len(faulty_indices)} faulty samples"
+            f"- Using {len(normal_idx)} normal and {len(faulty_idx)} faulty runs"
         )
 
         # Calculate class weights due to potential imbalance
-        class_ratio = len(normal_indices) / len(faulty_indices)
-        logger.info(f"Class imbalance ratio (reference:faulty): {class_ratio:.2f}:1")
+        class_ratio = len(normal_idx) / len(faulty_idx)
+        logger.info(f"- Class imbalance ratio (normal:faulty): {class_ratio:.2f}:1.00")
 
         # Combine indices (all samples)
-        all_indices = np.concatenate([normal_indices, faulty_indices])
+        all_indices = np.concatenate([normal_idx, faulty_idx])
         x_values = filtered_torque_values[all_indices]
 
         # Create binary labels using list comprehension
         y_raw = filtered_label_values[all_indices]
         y_values = np.array([0 if label == "normal" else 1 for label in y_raw])
-
-        # Convert to sktime format for sktime models
-        X_sktime = from_2d_array_to_nested(x_values)
         y = pd.Series(y_values)
 
+        # Convert to sktime format for sktime models
+        x_sktime = from_2d_array_to_nested(x_values)
         # Also prepare flattened format for sklearn models
-        # Reshape the 3D array to 2D (n_samples, n_features)
-        X_sklearn = x_values.reshape(x_values.shape[0], -1)
+        x_sklearn = x_values.reshape(x_values.shape[0], -1)
 
         # Split into train/test sets
         logger.debug("Splitting data into train/test sets")
@@ -124,7 +119,12 @@ def run_binary_vs_ref(model_selection="paper", save_results=True):
             y_train,
             y_test,
         ) = train_test_split(
-            X_sktime, X_sklearn, y, test_size=0.2, stratify=y, random_state=42
+            x_sktime,
+            x_sklearn,
+            y,
+            test_size=0.2,
+            stratify=y,
+            random_state=42,
         )
         logger.debug(
             f"Train set: {len(y_train)} samples, Test set: {len(y_test)} samples"
@@ -149,29 +149,27 @@ def run_binary_vs_ref(model_selection="paper", save_results=True):
                     y_pred = model.predict(X_sktime_test)
 
                 # Evaluate
-                report = classification_report(
-                    y_test, y_pred, output_dict=True, zero_division=0
-                )
+                result_dict = evaluate_model(y_test, y_pred)
 
                 # Store results
                 result_entry = {
                     "class": class_value,
                     "model": model_name,
-                    "accuracy": report["accuracy"],
-                    "precision": report.get("1", {}).get("precision", 0),
-                    "recall": report.get("1", {}).get("recall", 0),
-                    "f1-score": report.get("1", {}).get("f1-score", 0),
-                    "reference_samples": len(normal_indices),
-                    "faulty_samples": len(faulty_indices),
+                    "accuracy": result_dict["accuracy"],
+                    "precision": result_dict["precision"],
+                    "recall": result_dict["recall"],
+                    "f1-score": result_dict["f1-score"],
+                    "reference_samples": len(normal_idx),
+                    "faulty_samples": len(faulty_idx),
                     "imbalance_ratio": class_ratio,
                 }
                 all_results.append(result_entry)
 
                 # Log performance metrics
                 logger.info(
-                    f"Performance for {model_name} on {class_value}: "
-                    f"Accuracy={report['accuracy']:.4f}, "
-                    f"F1-Score={report.get('1', {}).get('f1-score', 0):.4f}"
+                    f"- Performance for {model_name} on {class_value}: "
+                    f"Accuracy={result_dict['accuracy']:.4f}, "
+                    f"F1-Score={result_dict['f1-score']:.4f}"
                 )
 
                 # Generate confusion matrix visualization
@@ -220,10 +218,3 @@ def run_binary_vs_ref(model_selection="paper", save_results=True):
         logger.info("Results saved successfully")
 
     return results_df
-
-
-if __name__ == "__main__":
-    # Run the experiment
-    logger.info("Starting experiment run_binary_vs_ref")
-    results = run_binary_vs_ref(model_selection="paper", save_results=True)
-    logger.info("Experiment completed")

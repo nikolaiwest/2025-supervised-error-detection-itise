@@ -7,12 +7,13 @@ PyScrew project using time series classification models. The script supports
 two distinct experimental approaches:
 
 1. Reference vs Faulty (vs_ref):
-   Compares normal/reference samples against all types of faulty samples,
-   treating this as a binary classification problem.
+   For each class, compares normal/reference samples of that specific class against
+   faulty samples of the same class, treating this as a binary classification problem.
 
-2. All vs All (vs_all):
-   Performs binary classification between each class pair, creating a
-   comprehensive comparison matrix of all sample types.
+2. All Normal vs Class-Specific Faulty (vs_all):
+   For each class, compares ALL normal/reference samples across ALL classes against
+   the faulty samples of that specific class. This tests if models can distinguish
+   between normal operation and specific fault types regardless of class context.
 
 Results are saved as CSV files and visualized through multiple plots to
 facilitate analysis and interpretation.
