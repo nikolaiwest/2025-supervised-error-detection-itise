@@ -1,0 +1,299 @@
+# Configuration file for sklearn-based models used in time series classification
+
+###############################################################################
+# BENCHMARK MODELS
+###############################################################################
+
+DummyClassifier:
+  # Simple benchmark classifier that makes random predictions
+  # Useful as a baseline to compare other models against
+  family: Benchmark
+  in_sets: [debug, paper, full, sklearn]
+  params:
+    # 'uniform' strategy assigns equal probability to all classes
+    strategy: "uniform"
+  import:
+    from: sklearn.dummy
+    class: DummyClassifier
+
+###############################################################################
+# LINEAR MODELS
+###############################################################################
+
+LogisticRegression:
+  # Implementation of logistic regression
+  # Good for binary or multi-class classification with linear decision boundaries
+  family: Linear
+  in_sets: [fast, full, sklearn]
+  params:
+    # Regularization strength - smaller values = stronger regularization
+    C: 1.0
+    # Set maximum iterations to ensure convergence with complex datasets
+    max_iter: 1000
+  import:
+    from: sklearn.linear_model
+    class: LogisticRegression
+
+LinearSVC:
+  # Linear Support Vector Classification
+  # Similar to SVC with linear kernel but implemented differently
+  # More efficient for larger datasets
+  family: Linear
+  in_sets: [full, sklearn]
+  params:
+    # Regularization parameter - smaller values = stronger regularization
+    C: 1.0
+    # Loss function - 'squared_hinge' is default and usually works well
+    loss: "squared_hinge"
+    # Dual or primal formulation - usually 'False' is faster for n_samples > n_features
+    dual: False
+    # Set maximum iterations to ensure convergence
+    max_iter: 1000
+  import:
+    from: sklearn.svm
+    class: LinearSVC
+
+SGDClassifier:
+  # Stochastic Gradient Descent classifier
+  # Implements various loss functions for linear classifiers with SGD training
+  # Very efficient for large datasets
+  family: Linear
+  in_sets: [full, sklearn]
+  params:
+    # 'log_loss' gives logistic regression, 'hinge' gives linear SVM
+    loss: "log_loss"
+    # Regularization term - L2 is standard ridge, L1 is lasso
+    penalty: "l2"
+    # Maximum number of passes over the training data
+    max_iter: 1000
+    # Set early stopping to avoid overfitting
+    early_stopping: True
+    # Shuffle data at each epoch
+    shuffle: True
+    # Helps with convergence
+    learning_rate: "optimal"
+  import:
+    from: sklearn.linear_model
+    class: SGDClassifier
+
+###############################################################################
+# TREE-BASED MODELS
+###############################################################################
+
+DecisionTreeClassifier:
+  # Simple tree-based classifier
+  # Fast to train but can overfit without proper tuning
+  # Included in "fast" set due to quick training time
+  family: Tree
+  in_sets: []
+  params:
+    # Controls the maximum depth to prevent overfitting
+    max_depth: 10
+    # Criterion for splitting - 'gini' or 'entropy'
+    criterion: "gini"
+    # Minimum samples required to split an internal node
+    min_samples_split: 2
+  import:
+    from: sklearn.tree
+    class: DecisionTreeClassifier
+
+RandomForestClassifier:
+  # Ensemble of decision trees
+  # Reduces overfitting through averaging of multiple trees
+  # Typically gives good performance out-of-box
+  family: Tree
+  in_sets: [paper, full, sklearn]
+  params:
+    # Number of trees in the forest
+    n_estimators: 100
+    # Criteria for splitting - 'gini' or 'entropy'
+    criterion: "gini"
+    # Use bootstrap samples for tree building
+    bootstrap: True
+  import:
+    from: sklearn.ensemble
+    class: RandomForestClassifier
+
+ExtraTreesClassifier:
+  # Extremely Randomized Trees
+  # Adds more randomization than Random Forests
+  # Reduces variance but may increase bias
+  family: Tree
+  in_sets: []
+  params:
+    # Number of trees in the forest
+    n_estimators: 100
+    # Criterion for splitting
+    criterion: "gini"
+  import:
+    from: sklearn.ensemble
+    class: ExtraTreesClassifier
+
+GradientBoostingClassifier:
+  # Builds trees sequentially, optimizing for errors of previous trees
+  # Usually provides better performance than simple tree models
+  # Can be slower to train than random forests
+  family: Tree
+  in_sets: [full, sklearn]
+  params:
+    # Number of boosting stages
+    n_estimators: 100
+    # Learning rate shrinks contribution of each tree
+    learning_rate: 0.1
+    # Maximum depth of individual trees
+    max_depth: 3
+    # Fraction of samples used for learning each tree
+    subsample: 1.0
+  import:
+    from: sklearn.ensemble
+    class: GradientBoostingClassifier
+
+BaggingClassifier:
+  # Ensemble method that fits multiple classifiers on random subsets of data
+  # Reduces variance by averaging predictions
+  # We'll use Decision Trees as the base estimator
+  family: Tree
+  in_sets: [full, sklearn]
+  params:
+    # Base estimator to use (Decision Tree works well)
+    estimator: None  # Will be set to DecisionTreeClassifier in code
+    # Number of base estimators
+    n_estimators: 100
+    # Whether to use bootstrap samples
+    bootstrap: True
+    # Whether to use feature sampling
+    bootstrap_features: False
+  import:
+    from: sklearn.ensemble
+    class: BaggingClassifier
+
+###############################################################################
+# DISTANCE-BASED MODELS
+###############################################################################
+
+KNeighborsClassifier:
+  # K-nearest neighbors classifier
+  # Simple yet effective algorithm for many tasks
+  # No real training phase - stores examples and computes distances at prediction time
+  family: Distance
+  in_sets: [full, sklearn]
+  params:
+    # Number of neighbors to consider
+    n_neighbors: 5
+    # Distance metric to use - 'minkowski' with p=2 is Euclidean distance
+    metric: "minkowski"
+    # Parameter for Minkowski metric
+    p: 2
+    # Algorithm used to compute nearest neighbors
+    algorithm: "auto"
+  import:
+    from: sklearn.neighbors
+    class: KNeighborsClassifier
+
+NearestCentroid:
+  # Simple centroid-based classifier
+  # Fast but less flexible than other approaches
+  # Computes centroid for each class and assigns based on closest centroid
+  family: Distance
+  in_sets: [full, sklearn]
+  params:
+    # Distance metric to use
+    metric: "euclidean"
+    # Threshold for shrinking centroids toward global mean
+    # Set to None to disable shrinkage
+    shrink_threshold: None
+  import:
+    from: sklearn.neighbors
+    class: NearestCentroid
+
+###############################################################################
+# PROBABILISTIC MODELS
+###############################################################################
+
+GaussianNB:
+  # Gaussian Naive Bayes classifier
+  # Based on applying Bayes' theorem with independence assumptions
+  # Works well for high-dimensional data
+  family: Probabilistic
+  in_sets: [full, sklearn]
+  params:
+    # Prior probabilities of the classes
+    # None means priors are adjusted according to data
+    priors: None
+    # Portion of the largest variance of all features that is
+    # added to variances for calculation stability
+    var_smoothing: 1e-9
+  import:
+    from: sklearn.naive_bayes
+    class: GaussianNB
+
+QuadraticDiscriminantAnalysis:
+  # Classifier with quadratic decision boundary
+  # Each class uses its own covariance matrix
+  # Works well when classes have very different covariance structures
+  family: Probabilistic
+  in_sets: [full, sklearn]
+  params:
+    # Regularization parameter - higher values = more regularization
+    reg_param: 0.0
+    # Tolerance for considering covariance matrices as rank deficient
+    tol: 0.0001
+    # Whether to store covariance matrices (uses more memory)
+    store_covariance: False
+    # Class priors (None means estimate from data)
+    priors: None
+  import:
+    from: sklearn.discriminant_analysis
+    class: QuadraticDiscriminantAnalysis
+
+###############################################################################
+# NEURAL MODELS
+###############################################################################
+
+MLPClassifier:
+  # Multi-layer Perceptron (Neural Network) classifier
+  # Works well with complex non-linear relationships
+  # Can be slow to train on larger datasets
+  family: Neural
+  in_sets: [full, sklearn]
+  params:
+    # Network architecture - two hidden layers
+    hidden_layer_sizes: (100, 50)
+    # Activation function
+    activation: "relu"
+    # Solver for weight optimization
+    solver: "adam"
+    # Learning rate initialization method
+    learning_rate_init: 0.001
+    # Maximum iterations (epochs)
+    max_iter: 200
+    # Early stopping to avoid overfitting
+    early_stopping: True
+    # Batch size for gradient updates
+    batch_size: "auto"
+  import:
+    from: sklearn.neural_network
+    class: MLPClassifier
+
+###############################################################################
+# KERNEL MODELS
+###############################################################################
+
+SVC:
+  # Support Vector Classification
+  # Uses kernel trick to transform data, effective in high-dimensional spaces
+  # Included in paper set as it's a powerful baseline model
+  family: Kernel
+  in_sets: [paper, full, sklearn]
+  params:
+    # Regularization parameter
+    C: 1.0
+    # Kernel type - 'rbf' works well in many cases
+    kernel: "rbf"
+    # Kernel coefficient for 'rbf' - 'scale' uses 1/(n_features * X.var())
+    gamma: "scale"
+    # Enable probability estimates (needed for some metrics)
+    probability: True
+  import:
+    from: sklearn.svm
+    class: SVC

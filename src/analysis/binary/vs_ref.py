@@ -4,16 +4,16 @@ from sklearn.model_selection import train_test_split
 from sktime.datatypes._panel._convert import from_2d_array_to_nested
 
 from src.data.loader import load_data
-from src.models.classifiers import get_model_dict
+from src.evaluation import evaluate_model
+from src.models import get_classifier_dict
 from src.plots.confusion_matrix import plot_confusion_matrix
 from src.plots.utils import ensure_directory, save_results_with_plots
 from src.utils.logger import get_logger
-from src.evaluation import evaluate_model
 
 logger = get_logger(__name__)
 
 
-def run_binary_vs_ref(model_selection="paper", save_results=True):
+def run_binary_vs_ref(model_selection="paper", save_results=False):
     """
     Run binary classification: All normal (reference) vs all faulty samples for each class value.
 
@@ -53,7 +53,7 @@ def run_binary_vs_ref(model_selection="paper", save_results=True):
 
     # Get models
     logger.info(f"Getting models for selection: {model_selection}")
-    model_dict = get_model_dict(model_selection)
+    model_dict = get_classifier_dict(model_selection)
     logger.debug(f"Loaded {len(model_dict)} models: {', '.join(model_dict.keys())}")
 
     # Run classification for each class value

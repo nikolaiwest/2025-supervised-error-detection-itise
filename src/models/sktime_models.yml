@@ -1,0 +1,287 @@
+# Configuration file for sktime-based time series models
+
+###############################################################################
+# DISTANCE-BASED MODELS
+###############################################################################
+
+KNeighborsTimeSeriesClassifier:
+  # K-nearest neighbors for time series
+  # Uses various distance measures between time series for classification
+  # Included in "fast" set as it's relatively quick to run
+  family: Distance
+  in_sets: [fast, full, sktime]
+  params:
+    # Number of neighbors to use
+    n_neighbors: 5
+    # Distance measure - 'dtw' provides good accuracy but is slower than 'euclidean'
+    distance: "dtw"
+    # Weight function used in prediction
+    weights: "uniform"
+    # Search algorithm - 'brute' for smaller datasets, 'ball_tree' may be more efficient for larger ones
+    algorithm: "brute"
+  import:
+    from: sktime.classification.distance_based
+    class: KNeighborsTimeSeriesClassifier
+
+ElasticEnsemble:
+  # Ensemble of nearest neighbor classifiers using elastic distance measures
+  # Combines multiple distance metrics (Euclidean, DTW, DDTW, WDTW, etc.)
+  # Can be very slow on larger datasets but often accurate
+  family: Distance
+  in_sets: [full, sktime]
+  params:
+    # Distance measures to include in the ensemble
+    # More distances = better accuracy but slower training
+    distance_measures: ["dtw", "ddtw", "wdtw", "lcss", "erp", "msm"]
+    # "proportion" for time taken to compute the distance measure 
+    # "fastrandom" for faster random sampling - better for large datasets
+    proportion_of_param_options: "proportion"
+  import:
+    from: sktime.classification.distance_based
+    class: ElasticEnsemble
+
+ProximityForest:
+  # Random forest using various distance measures
+  # Each tree node uses a different distance measure for splits
+  # Versatile and generally effective
+  family: Distance
+  in_sets: [full, sktime]
+  params:
+    # Number of trees in the forest
+    n_estimators: 100
+    # Distance measures to use - None means random selection from available measures
+    distance_measure: None
+    # Maximum depth of trees (inf = unlimited)
+    max_depth: inf
+    # Number of stump evaluations to perform
+    n_stump_evaluations: 5
+  import:
+    from: sktime.classification.distance_based
+    class: ProximityForest
+
+###############################################################################
+# INTERVAL-BASED MODELS
+###############################################################################
+
+TimeSeriesForestClassifier:
+  # Random forest adaptation for time series
+  # Extracts simple summary statistics (mean, std, slope) from random intervals
+  # Very efficient and effective for many time series problems
+  # Included in "paper" set as a solid, interpretable model
+  family: Interval
+  in_sets: [paper, full, sktime]
+  params:
+    # Number of trees in forest
+    n_estimators: 200
+    # Minimum length of an interval
+    min_interval: 3
+    # Optional - helps with segmented time series by restricting interval extraction
+    # Set to None to extract intervals from entire series
+    inner_series_length: None
+  import:
+    from: sktime.classification.interval_based
+    class: TimeSeriesForestClassifier
+
+RandomIntervalSpectralEnsemble:
+  # Extracts spectral features from random intervals
+  # Combines interval-based approach with frequency domain features
+  # Good for capturing periodic patterns
+  family: Interval
+  in_sets: [full, sktime]
+  params:
+    # Number of trees in forest
+    n_estimators: 500
+    # Minimum interval width
+    min_interval: 16
+    # Maximum number of autocorrelation terms to use
+    acf_lag: 100
+    # Minimum number of autocorrelation terms to use
+    acf_min_values: 4
+  import:
+    from: sktime.classification.interval_based
+    class: RandomIntervalSpectralEnsemble
+
+CanonicalIntervalForest:
+  # Advanced version of TimeSeriesForest
+  # Uses multiple feature types from intervals (not just mean, std, slope)
+  # More powerful but more computationally expensive
+  family: Interval
+  in_sets: [full, sktime]
+  params:
+    # Number of trees in the forest
+    n_estimators: 200
+    # Number of intervals to create - more = better but slower
+    n_intervals: 4
+    # Attributes to extract from intervals
+    # att_subsample_size=10 means 10 random attributes per tree
+    att_subsample_size: 10
+  import:
+    from: sktime.classification.interval_based
+    class: CanonicalIntervalForest
+
+###############################################################################
+# DICTIONARY-BASED MODELS
+###############################################################################
+
+BOSSEnsemble:
+  # Bag of SFA Symbols Ensemble
+  # Transforms time series into symbolic representations and uses histograms
+  # Effective for capturing recurring patterns
+  family: Dictionary
+  in_sets: [full, sktime]
+  params:
+    # Retention threshold - keep models within this percentage of the best
+    threshold: 0.92
+    # Maximum size of the ensemble
+    max_ensemble_size: 500
+    # Maximum window length as proportion of series length
+    max_win_len_prop: 1.0
+    # Minimum window size
+    min_window: 10
+    # Alphabet size for discretization
+    alphabet_size: 4
+    # Feature selection strategy
+    feature_selection: "chi2"
+    # Use BOSS distance measure (more accurate but slower)
+    use_boss_distance: True
+  import:
+    from: sktime.classification.dictionary_based
+    class: BOSSEnsemble
+
+WEASEL:
+  # Word ExtrAction for time SEries cLassification
+  # Improved version of BOSS with feature selection and bigrams
+  # Often more accurate than BOSS and faster
+  family: Dictionary
+  in_sets: [full, sktime]
+  params:
+    # Use ANOVA test for Fourier coefficient selection
+    anova: True
+    # Use bigrams of SFA words for better pattern recognition
+    bigrams: True
+    # Binning strategy for discretization
+    binning_strategy: "information-gain"
+    # Window size increment
+    window_inc: 2
+    # P-value threshold for chi^2 feature selection
+    p_threshold: 0.05
+    # Alphabet size for the SFA transformation
+    alphabet_size: 4
+    # Feature selection method
+    feature_selection: "chi2"
+  import:
+    from: sktime.classification.dictionary_based
+    class: WEASEL
+
+
+###############################################################################
+# SHAPELET-BASED MODELS
+###############################################################################
+
+ShapeletTransformClassifier:
+  # Extracts discriminative subsequences (shapelets) from time series
+  # Transforms data based on distances to these shapelets
+  # Very interpretable but can be very slow for longer time series
+  # Included in "paper" set as it provides insights into important patterns
+  family: Shapelet
+  in_sets: [paper, full, sktime]
+  params:
+    # Number of candidate shapelets to sample and evaluate
+    # For large datasets, consider reducing this
+    n_shapelet_samples: 10000
+    # Maximum number of shapelets to keep for the final transform
+    # None uses min(10 * n_instances, 1000)
+    max_shapelets: 1000
+    # Maximum shapelet length to consider
+    # None means no maximum is applied
+    max_shapelet_length: None
+    # Use a random forest as the classifier on transformed data
+    estimator: None  # Will be set to RandomForestClassifier in code
+    # Process shapelets in batches to manage memory
+    batch_size: 100
+  import:
+    from: sktime.classification.shapelet_based
+    class: ShapeletTransformClassifier
+
+MrSEQL:
+  # Multiple Representation Sequence Learner
+  # Uses multiple symbolic representations and rule-based learning, good for interpretable classification
+  # However, MrSEQL was removed from sktime and has known compilation issues on Windows
+  # It requires C++ compilation which many users won't have, creating a significant barrier to adoption
+  family: Shapelet
+  in_sets: []
+  params:
+    # Mode: 'fs' (feature selection with logistic regression) or 'clf' (ensemble of SEQL models)
+    seql_mode: 'fs'
+    # Symbolic representations to use: 'sax', 'sfa', or both
+    symrep: 'sax'
+    # Optional custom configuration (set to None by default)
+    custom_config: None
+  import:
+    from: sktime.classification.shapelet_based
+    class: MrSEQL
+
+ShapeDTW:
+  # Shape-based Dynamic Time Warping classifier
+  # Extracts subsequences and transforms them with shape descriptor functions
+  # Combines shapelet approach with DTW distance measure
+  family: Shapelet
+  in_sets: [full, sktime]
+  params:
+    # Number of neighbors to use in the final classification
+    n_neighbors: 1
+    # Length of subsequences to extract
+    subsequence_length: 30
+    # Shape descriptor function to transform subsequences
+    # Options: 'raw', 'derivative', 'paa', 'dwt', etc.
+    shape_descriptor_function: 'raw'
+    # Can use compound shape descriptors by setting this to a list
+    shape_descriptor_functions: None
+    # Additional parameters for the distance metric
+    metric_params: None
+  import:
+    from: sktime.classification.distance_based
+    class: ShapeDTW
+
+###############################################################################
+# ADVANCED/HYBRID MODELS
+###############################################################################
+
+ROCKET:
+  # Random Convolutional Kernel Transform
+  # Uses random convolutional kernels to transform time series
+  # Extremely fast and surprisingly accurate
+  family: Advanced
+  in_sets: [full, sktime]
+  params:
+    # Number of kernels to generate
+    # More kernels = higher accuracy but more memory usage
+    num_kernels: 10000
+    # Type of Rocket transformer to use
+    rocket_transform: "rocket"
+    # Use multivariate Rocket if data is multivariate
+    use_multivariate: "auto"
+  import:
+    from: sktime.classification.kernel_based
+    class: RocketClassifier
+
+Arsenal:
+  # Combination of ROCKET transforms with ensemble classifiers
+  # More accurate than base ROCKET but slower
+  # State-of-the-art performance on many datasets
+  family: Advanced
+  in_sets: [full, sktime]
+  params:
+    # Number of estimators in the ensemble
+    n_estimators: 25
+    # Number of kernels in each ROCKET transform
+    num_kernels: 2000
+    # Type of Rocket transformer to use
+    rocket_transform: "rocket"
+    # No time limit (use n_estimators)
+    time_limit_in_minutes: 0.0
+    # Don't save transformed data (saves memory)
+    save_transformed_data: False
+  import:
+    from: sktime.classification.kernel_based
+    class: Arsenal

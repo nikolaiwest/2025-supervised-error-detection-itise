@@ -39,7 +39,7 @@ logger = get_logger(__name__)
 
 if __name__ == "__main__":
     # Set model selection
-    model_selection = "paper"
+    model_selection = "fast"
 
     # Log experiment configuration
     start_time = datetime.now()
@@ -72,6 +72,7 @@ if __name__ == "__main__":
     )
     logger.info("Visualizations saved to results/binary/vs_ref/images/")
 
+    """ 
     # =========================================================================
     # Experiment 2: All vs. All (Multi-Binary)
     # =========================================================================
@@ -116,3 +117,5 @@ if __name__ == "__main__":
         "All results and visualizations available in 'results/binary/' directory"
     )
     logger.info("Binary classification experiments completed successfully.")
+
+    """
