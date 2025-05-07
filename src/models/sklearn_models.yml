@@ -8,7 +8,7 @@ DummyClassifier:
   # Simple benchmark classifier that makes random predictions
   # Useful as a baseline to compare other models against
   family: Benchmark
-  in_sets: [debug, paper, full, sklearn]
+  in_sets: [debug, fast, paper, full, sklearn]
   params:
     # 'uniform' strategy assigns equal probability to all classes
     strategy: "uniform"
@@ -85,7 +85,7 @@ DecisionTreeClassifier:
   # Fast to train but can overfit without proper tuning
   # Included in "fast" set due to quick training time
   family: Tree
-  in_sets: []
+  in_sets: [fast]
   params:
     # Controls the maximum depth to prevent overfitting
     max_depth: 10

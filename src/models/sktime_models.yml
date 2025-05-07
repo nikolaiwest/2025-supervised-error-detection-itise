@@ -9,7 +9,7 @@ KNeighborsTimeSeriesClassifier:
   # Uses various distance measures between time series for classification
   # Included in "fast" set as it's relatively quick to run
   family: Distance
-  in_sets: [fast, full, sktime]
+  in_sets: [full, sktime]
   params:
     # Number of neighbors to use
     n_neighbors: 5
