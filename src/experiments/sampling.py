@@ -1,8 +1,7 @@
-"""
-Sampling strategies for different experiment types.
-"""
-
+import json
+import os
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -53,7 +52,9 @@ class ExperimentDataset:
 
 
 def get_sampling_data(
-    data: Tuple[np.ndarray, np.ndarray, np.ndarray], experiment_type: str
+    data: Tuple[np.ndarray, np.ndarray, np.ndarray],
+    experiment_type: str,
+    scenario_id: str,
 ) -> List[Dict[str, Any]]:
     """
     Generate datasets for different experiment configurations based on experiment type.
@@ -64,6 +65,8 @@ def get_sampling_data(
         Tuple of (torque_values, class_values, scenario_condition)
     experiment_type : str
         Type of experiment to run (binary_vs_ref, binary_vs_all, multiclass_all, multiclass_group)
+    scenario_id : str, optional
+        Scenario identifier used to load appropriate configurations
 
     Returns:
     --------
@@ -79,7 +82,7 @@ def get_sampling_data(
     elif experiment_type == "binary_vs_all":
         return _get_binary_vs_all_data(data[0], data[1], data[2])
     elif experiment_type == "multiclass_with_groups":
-        return _get_multiclass_with_groups(data[0], data[1], data[2])
+        return _get_multiclass_with_groups(data[0], data[1], data[2], scenario_id)
     elif experiment_type == "multiclass_with_all":
         return _get_multiclass_with_all(data[0], data[1], data[2])
     else:
@@ -212,54 +215,57 @@ def _get_binary_vs_all_data(
 
 
 def _get_multiclass_with_groups(
-    torque_values: np.ndarray, class_values: np.ndarray, scenario_condition: np.ndarray
+    torque_values: np.ndarray,
+    class_values: np.ndarray,
+    scenario_condition: np.ndarray,
+    scenario_id: str,
 ) -> List[Dict[str, Any]]:
-    """Generate datasets for multi-class classification within error groups."""
+    """
+    Generate datasets for multi-class classification within error groups.
+
+    Groups are loaded from a JSON configuration file based on the scenario ID.
+
+    Parameters:
+    -----------
+    torque_values : np.ndarray
+        Time series data with shape (n_samples, n_timestamps)
+    class_values : np.ndarray
+        Class labels for each sample
+    scenario_condition : np.ndarray
+        Additional categorical information for each sample (normal/faulty)
+    scenario_id : str, optional
+        Scenario identifier used to load the appropriate group configuration (default: "s04")
+
+    Returns:
+    --------
+    List[Dict[str, Any]]
+        List of dataset configurations for multiclass classification within groups
+
+    Raises:
+    -------
+    SamplingError
+        If no valid datasets could be created
+    FileNotFoundError
+        If the group configuration file for the scenario cannot be found
+    """
     datasets = []
-    # Define groups
-    # TODO: move to a separate file or so for multiple scenarios (not just s04...)
-    error_groups = {
-        # Variations in screw thread quality
-        "group_1": [
-            "101_deformed-thread",
-            "102_filed-screw-tip",
-            "103_glued-screw-tip",
-            "104_coated-screw",
-            "105_worn-out-screw",
-        ],
-        # Variation in workpiece behavior
-        "group_2": [
-            "201_damaged-contact-surface",
-            "202_broken-contact-surface",
-            "203_metal-ring-upper-part",
-            "204_rubber-ring-upper-part",
-            "205_different-material",
-        ],
-        # Variation in the screw hole
-        "group_3": [
-            "301_plastic-pin-screw-hole",
-            "302_enlarged-screw-hole",
-            "303_less-glass-fiber",
-            "304_glued-screw-hole",
-            "305_gap-between-parts",
-        ],
-        # Environmental variations
-        "group_4": [
-            "401_surface-lubricant",
-            "402_surface-moisture",
-            "403_plastic-chip",
-            "404_increased-temperature",
-            "405_decreased-temperature",
-        ],
-        # Variations in process parameters
-        "group_5": [
-            "001_control-group",
-            "501_increased-ang-velocity",
-            "502_decreased-ang-velocity",
-            "503_increased-torque",
-            "504_decreased-torque",
-        ],
-    }
+
+    # Load error groups from JSON file based on scenario ID
+    groups_file = Path(f"experiments/groups/{scenario_id}.json")
+
+    # Ensure directory exists
+    os.makedirs(groups_file.parent, exist_ok=True)
+
+    # Check if file exists, if not provide helpful error
+    if not groups_file.exists():
+        raise FileNotFoundError(
+            f"Error groups configuration file not found at {groups_file}. "
+            f"Please create the file with appropriate error groupings for scenario {scenario_id}."
+        )
+
+    # Load error groups from JSON file
+    with open(groups_file, "r") as f:
+        error_groups = json.load(f)
 
     # Process each group
     for group_name, group_errors in error_groups.items():

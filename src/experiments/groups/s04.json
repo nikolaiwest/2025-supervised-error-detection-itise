@@ -1,0 +1,37 @@
+{
+    "group_1": [
+      "101_deformed-thread",
+      "102_filed-screw-tip",
+      "103_glued-screw-tip",
+      "104_coated-screw",
+      "105_worn-out-screw"
+    ],
+    "group_2": [
+      "201_damaged-contact-surface",
+      "202_broken-contact-surface",
+      "203_metal-ring-upper-part",
+      "204_rubber-ring-upper-part",
+      "205_different-material"
+    ],
+    "group_3": [
+      "301_plastic-pin-screw-hole",
+      "302_enlarged-screw-hole",
+      "303_less-glass-fiber",
+      "304_glued-screw-hole",
+      "305_gap-between-parts"
+    ],
+    "group_4": [
+      "401_surface-lubricant",
+      "402_surface-moisture",
+      "403_plastic-chip",
+      "404_increased-temperature",
+      "405_decreased-temperature"
+    ],
+    "group_5": [
+      "001_control-group",
+      "501_increased-ang-velocity",
+      "502_decreased-ang-velocity",
+      "503_increased-torque",
+      "504_decreased-torque"
+    ]
+  }
