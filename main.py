@@ -1,10 +1,5 @@
-import warnings
-
-from sklearn.exceptions import ConvergenceWarning
-
 from src.experiments import ExperimentRunner
 
-warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
 DEFAULT_SETTINGS = {
     "scenario_id": "s04",
@@ -20,9 +15,11 @@ OPTIONS = [
 ]
 
 
-runner = ExperimentRunner(
-    experiment_type=OPTIONS[0],
-    model_selection="fast",
-    **DEFAULT_SETTINGS,
-)
-runner.run()
+for option in OPTIONS:
+
+    runner = ExperimentRunner(
+        experiment_type=option,
+        model_selection="paper",
+        **DEFAULT_SETTINGS,
+    )
+    runner.run()

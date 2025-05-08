@@ -50,7 +50,7 @@ ProximityForest:
     # Number of trees in the forest
     n_estimators: 100
     # Distance measures to use - None means random selection from available measures
-    distance_measure: None
+    distance_measure: null
     # Maximum depth of trees (inf = unlimited)
     max_depth: inf
     # Number of stump evaluations to perform
@@ -77,7 +77,7 @@ TimeSeriesForestClassifier:
     min_interval: 3
     # Optional - helps with segmented time series by restricting interval extraction
     # Set to None to extract intervals from entire series
-    inner_series_length: None
+    inner_series_length: null
   import:
     from: sktime.classification.interval_based
     class: TimeSeriesForestClassifier
@@ -194,9 +194,9 @@ ShapeletTransformClassifier:
     max_shapelets: 1000
     # Maximum shapelet length to consider
     # None means no maximum is applied
-    max_shapelet_length: None
+    max_shapelet_length: null
     # Use a random forest as the classifier on transformed data
-    estimator: None  # Will be set to RandomForestClassifier in code
+    estimator: null  # Will be set to RandomForestClassifier in code
     # Process shapelets in batches to manage memory
     batch_size: 100
   import:
@@ -216,7 +216,7 @@ MrSEQL:
     # Symbolic representations to use: 'sax', 'sfa', or both
     symrep: 'sax'
     # Optional custom configuration (set to None by default)
-    custom_config: None
+    custom_config: null
   import:
     from: sktime.classification.shapelet_based
     class: MrSEQL
@@ -235,10 +235,6 @@ ShapeDTW:
     # Shape descriptor function to transform subsequences
     # Options: 'raw', 'derivative', 'paa', 'dwt', etc.
     shape_descriptor_function: 'raw'
-    # Can use compound shape descriptors by setting this to a list
-    shape_descriptor_functions: None
-    # Additional parameters for the distance metric
-    metric_params: None
   import:
     from: sktime.classification.distance_based
     class: ShapeDTW

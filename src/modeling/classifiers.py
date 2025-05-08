@@ -1,17 +1,15 @@
 import importlib
+from typing import Any, Dict, List, Optional, Type, TypeVar, Union, cast
 
 import yaml
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.tree import DecisionTreeClassifier
 
 from src.utils import get_logger
 
 # Set up logger
 logger = get_logger(__name__)
 
-# Default settings
-DEFAULT_RANDOM_SEED = 42
-DEFAULT_N_JOBS = -1
+# Define type variables for models
+ModelType = TypeVar("ModelType")
 
 
 # Custom exceptions
@@ -27,20 +25,27 @@ class ConfigurationError(Exception):
     pass
 
 
-def load_model_configs():
-    """Load model configurations from YAML files."""
+def load_model_configs() -> Dict[str, Dict[str, Any]]:
+    """
+    Load model configurations from YAML files.
+
+    Returns:
+    --------
+    Dict[str, Dict[str, Any]]
+        Combined dictionary of model configurations from sklearn and sktime
+    """
     # Load sklearn models
-    with open("src/models/sklearn_models.yml", "r") as file:
+    with open("src/modeling/sklearn_models.yml", "r") as file:
         sklearn_configs = yaml.safe_load(file)
     # Load sktime models
-    with open("src/models/sktime_models.yml", "r") as file:
+    with open("src/modeling/sktime_models.yml", "r") as file:
         sktime_configs = yaml.safe_load(file)
     return {**sklearn_configs, **sktime_configs}
 
 
 def get_classifier_dict(
-    model_selection="paper", random_seed=DEFAULT_RANDOM_SEED, n_jobs=DEFAULT_N_JOBS
-):
+    model_selection: str, random_seed: int, n_jobs: int
+) -> Dict[str, Any]:
     """
     Return a dictionary of initialized models based on selection.
 
@@ -56,7 +61,7 @@ def get_classifier_dict(
 
     Returns:
     --------
-    dict
+    Dict[str, Any]
         Dictionary with model names as keys and initialized models as values
 
     Raises:
@@ -80,7 +85,7 @@ def get_classifier_dict(
             )
 
         # Initialize empty result dictionary
-        classifiers = {}
+        classifiers: Dict[str, Any] = {}
 
         # Filter models based on model_selection
         for name, config in model_configs.items():
@@ -106,7 +111,9 @@ def get_classifier_dict(
         raise
 
 
-def _initialize_model(name, config, random_seed, n_jobs):
+def _initialize_model(
+    name: str, config: Dict[str, Any], random_seed: int, n_jobs: int
+) -> Any:
     """
     Initialize a model from its configuration.
 
@@ -117,7 +124,7 @@ def _initialize_model(name, config, random_seed, n_jobs):
     -----------
     name : str
         Name of the model to initialize
-    config : dict
+    config : Dict[str, Any]
         Configuration dictionary for the model
     random_seed : int
         Random seed to set for models that support it
@@ -126,7 +133,7 @@ def _initialize_model(name, config, random_seed, n_jobs):
 
     Returns:
     --------
-    model
+    Any
         Initialized model instance
 
     Raises:
@@ -143,6 +150,8 @@ def _initialize_model(name, config, random_seed, n_jobs):
         # Handle special cases
         if name == "BaggingClassifier" and params.get("estimator") is None:
             # Set default base estimator for BaggingClassifier
+            from sklearn.tree import DecisionTreeClassifier
+
             params["estimator"] = DecisionTreeClassifier(
                 max_depth=5, random_state=random_seed
             )
@@ -150,6 +159,8 @@ def _initialize_model(name, config, random_seed, n_jobs):
 
         if name == "ShapeletTransformClassifier" and params.get("estimator") is None:
             # Set default classifier for transformed data
+            from sklearn.ensemble import RandomForestClassifier
+
             params["estimator"] = RandomForestClassifier(
                 n_estimators=100, n_jobs=n_jobs, random_state=random_seed
             )
@@ -205,7 +216,7 @@ def _initialize_model(name, config, random_seed, n_jobs):
         raise ModelInitializationError(f"Failed to initialize {name}: {str(e)}") from e
 
 
-def _get_param_names(module_name, class_name):
+def _get_param_names(module_name: str, class_name: str) -> List[str]:
     """
     Get parameter names for a given class.
 
@@ -218,7 +229,7 @@ def _get_param_names(module_name, class_name):
 
     Returns:
     --------
-    list
+    List[str]
         List of parameter names for the class
     """
     try:

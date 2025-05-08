@@ -156,7 +156,7 @@ BaggingClassifier:
   in_sets: [full, sklearn]
   params:
     # Base estimator to use (Decision Tree works well)
-    estimator: None  # Will be set to DecisionTreeClassifier in code
+    estimator: null  # Will be set to DecisionTreeClassifier in code
     # Number of base estimators
     n_estimators: 100
     # Whether to use bootstrap samples
@@ -199,9 +199,6 @@ NearestCentroid:
   params:
     # Distance metric to use
     metric: "euclidean"
-    # Threshold for shrinking centroids toward global mean
-    # Set to None to disable shrinkage
-    shrink_threshold: None
   import:
     from: sklearn.neighbors
     class: NearestCentroid
@@ -219,7 +216,7 @@ GaussianNB:
   params:
     # Prior probabilities of the classes
     # None means priors are adjusted according to data
-    priors: None
+    priors: null
     # Portion of the largest variance of all features that is
     # added to variances for calculation stability
     var_smoothing: 1e-9
@@ -241,7 +238,7 @@ QuadraticDiscriminantAnalysis:
     # Whether to store covariance matrices (uses more memory)
     store_covariance: False
     # Class priors (None means estimate from data)
-    priors: None
+    priors: null
   import:
     from: sklearn.discriminant_analysis
     class: QuadraticDiscriminantAnalysis

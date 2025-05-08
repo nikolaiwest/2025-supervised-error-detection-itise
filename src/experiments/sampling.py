@@ -251,7 +251,7 @@ def _get_multiclass_with_groups(
     datasets = []
 
     # Load error groups from JSON file based on scenario ID
-    groups_file = Path(f"experiments/groups/{scenario_id}.json")
+    groups_file = Path(f"src/experiments/groups/{scenario_id}.json")
 
     # Ensure directory exists
     os.makedirs(groups_file.parent, exist_ok=True)
