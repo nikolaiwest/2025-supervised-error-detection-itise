@@ -184,7 +184,7 @@ ShapeletTransformClassifier:
   # Very interpretable but can be very slow for longer time series
   # Included in "paper" set as it provides insights into important patterns
   family: Shapelet
-  in_sets: [paper, full, sktime]
+  in_sets: [full, sktime]
   params:
     # Number of candidate shapelets to sample and evaluate
     # For large datasets, consider reducing this
@@ -248,7 +248,7 @@ ROCKET:
   # Uses random convolutional kernels to transform time series
   # Extremely fast and surprisingly accurate
   family: Advanced
-  in_sets: [full, sktime]
+  in_sets: [paper, full, sktime]
   params:
     # Number of kernels to generate
     # More kernels = higher accuracy but more memory usage

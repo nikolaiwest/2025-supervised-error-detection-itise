@@ -3,6 +3,7 @@ from typing import Any, Dict, Generator, Tuple, Union
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator
+from sklearn.metrics import confusion_matrix
 from sktime.classification.base import BaseClassifier
 from sktime.datatypes._panel._convert import from_2d_array_to_nested
 
@@ -80,6 +81,8 @@ def apply_model(
 
     try:
         scores = []
+        all_y_test = []
+        all_y_pred = []
 
         # Use CV generator to get properly aligned splits
         for x_train, x_test, y_train, y_test in _cross_validation_split(
@@ -106,6 +109,10 @@ def apply_model(
                 else y_test
             )
 
+            # Store for confusion matrix calculation
+            all_y_test.append(y_test_values)
+            all_y_pred.append(y_pred)
+
             # Evaluate
             scores.append(evaluate_model(y_test_values, y_pred))
 
@@ -125,8 +132,13 @@ def apply_model(
             f"{model_name}: Evaluation complete (f1_score: {result.get('f1_score', 0):.2f})"
         )
 
-        # Return the result dict
-        return result
+        # Calculate confusion matrix across all folds
+        all_y_test_flat = np.concatenate(all_y_test)
+        all_y_pred_flat = np.concatenate(all_y_pred)
+        cm = confusion_matrix(all_y_test_flat, all_y_pred_flat)
+
+        # Return the result dict and confusion matrix
+        return result, cm
 
     except Exception as e:
         logger.error(f"Error evaluating {model_name}: {str(e)}")
@@ -134,7 +146,7 @@ def apply_model(
             "dataset": dataset_name,
             "model": model_name,
             "error": str(e),
-        }
+        }, None
 
 
 def _is_sktime_classifier(model: Union[BaseEstimator, BaseClassifier]) -> bool:

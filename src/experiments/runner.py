@@ -303,8 +303,19 @@ class ExperimentRunner:
         self.results = []
         for data in experiment_data:
             for model_name, model in experiment_models.items():
-                result = self._apply_model(data, model_name, model)
+                result, confusion_matrix = self._apply_model(data, model_name, model)
                 self.results.append(result)
+
+                # Save the confusion matrix for each model and dataset
+                if confusion_matrix is not None and True:  # disable during debugging
+                    cm_path = os.path.join(
+                        self._output_dir,
+                        self.scenario_id,
+                        self.experiment_type,
+                        f"{data['name']}_{model_name}_cm.csv",
+                    )
+                    pd.DataFrame(confusion_matrix).to_csv(cm_path, index=False)
+                    self.logger.info(f"Confusion matrix saved to {cm_path}")
 
         # Store results
         self._store_results(self.results)

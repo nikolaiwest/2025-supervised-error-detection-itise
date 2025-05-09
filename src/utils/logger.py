@@ -40,7 +40,7 @@ def get_logs_dir() -> Path:
     # Define logs directory relative to this file
     # Assuming this file is in src/utils/
     base_dir = Path(__file__).parent.parent.parent  # Go up to project root
-    logs_dir = base_dir / "utils" / "logs"
+    logs_dir = base_dir / "src" / "utils" / "logs"
 
     # Create directory if it doesn't exist
     logs_dir.mkdir(parents=True, exist_ok=True)

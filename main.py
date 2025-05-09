@@ -8,9 +8,9 @@ DEFAULT_SETTINGS = {
 }
 
 OPTIONS = [
-    "binary_vs_ref",
-    "binary_vs_all",
-    "multiclass_with_groups",
+    #    "binary_vs_ref",
+    #    "binary_vs_all",
+    #    "multiclass_with_groups",
     "multiclass_with_all",
 ]
 
