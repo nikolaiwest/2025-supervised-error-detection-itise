@@ -230,7 +230,38 @@ class ExperimentRunner:
             random_state=self.random_seed,
         )
 
-    def _store_results(
+    def _save_confusion_matrix(self, confusion_matrix, model_name):
+        """
+        Save a confusion matrix as a CSV file.
+
+        Parameters:
+        -----------
+        confusion_matrix : array-like
+            The confusion matrix to save
+        model_name : str
+            Name of the model for the filename
+        """
+        if confusion_matrix is None:
+            return
+
+        # Create the full path for the confusion matrix directory
+        cm_dir = os.path.join(
+            self._output_dir,
+            self.scenario_id,
+            self.experiment_type,
+            "confusion_matrix",
+        )
+        # Ensure the directory exists
+        os.makedirs(cm_dir, exist_ok=True)
+
+        # Create the full path for the CSV file
+        cm_path = os.path.join(cm_dir, f"{model_name}_cm.csv")
+
+        # Save the confusion matrix
+        pd.DataFrame(confusion_matrix).to_csv(cm_path, index=False)
+        self.logger.info(f"Confusion matrix saved to {cm_path}")
+
+    def _save_results_csv(
         self, results: List[Dict[str, Any]], output_path: Optional[str] = None
     ) -> None:
         """
@@ -306,16 +337,11 @@ class ExperimentRunner:
                 result, confusion_matrix = self._apply_model(data, model_name, model)
                 self.results.append(result)
 
-                # Save the confusion matrix for each model and dataset
+                # Save the confusion matrix if available
                 if confusion_matrix is not None and True:  # disable during debugging
-                    cm_path = os.path.join(
-                        self._output_dir,
-                        self.scenario_id,
-                        self.experiment_type,
-                        f"{data['name']}_{model_name}_cm.csv",
-                    )
-                    pd.DataFrame(confusion_matrix).to_csv(cm_path, index=False)
-                    self.logger.info(f"Confusion matrix saved to {cm_path}")
+                    self._save_confusion_matrix(confusion_matrix, model_name)
 
         # Store results
-        self._store_results(self.results)
+        self._save_results_csv(self.results)
+
+        return self.results

@@ -219,7 +219,7 @@ GaussianNB:
     priors: null
     # Portion of the largest variance of all features that is
     # added to variances for calculation stability
-    var_smoothing: 1e-9
+    var_smoothing:  0.000000001 # 1e-9
   import:
     from: sklearn.naive_bayes
     class: GaussianNB
@@ -232,7 +232,7 @@ QuadraticDiscriminantAnalysis:
   in_sets: [full, sklearn]
   params:
     # Regularization parameter - higher values = more regularization
-    reg_param: 0.0
+    reg_param: 0.1
     # Tolerance for considering covariance matrices as rank deficient
     tol: 0.0001
     # Whether to store covariance matrices (uses more memory)
@@ -255,7 +255,7 @@ MLPClassifier:
   in_sets: [full, sklearn]
   params:
     # Network architecture - two hidden layers
-    hidden_layer_sizes: (100, 50)
+    hidden_layer_sizes: 100 # set to default
     # Activation function
     activation: "relu"
     # Solver for weight optimization
