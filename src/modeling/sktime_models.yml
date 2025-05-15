@@ -32,10 +32,7 @@ ElasticEnsemble:
   params:
     # Distance measures to include in the ensemble
     # More distances = better accuracy but slower training
-    distance_measures: ["dtw", "ddtw", "wdtw", "lcss", "erp", "msm"]
-    # "proportion" for time taken to compute the distance measure 
-    # "fastrandom" for faster random sampling - better for large datasets
-    proportion_of_param_options: "proportion"
+    distance_measures: ["dtw"] # , "ddtw", "wdtw", "lcss", "erp", "msm"]
   import:
     from: sktime.classification.distance_based
     class: ElasticEnsemble
@@ -45,14 +42,15 @@ ProximityForest:
   # Each tree node uses a different distance measure for splits
   # Versatile and generally effective
   family: Distance
-  in_sets: [full, sktime]
+  in_sets: []
   params:
     # Number of trees in the forest
     n_estimators: 100
     # Distance measures to use - None means random selection from available measures
     distance_measure: null
     # Maximum depth of trees (inf = unlimited)
-    max_depth: inf
+    # max_depth: math.inf is default
+    max_depth: 30
     # Number of stump evaluations to perform
     n_stump_evaluations: 5
   import:
@@ -118,6 +116,23 @@ CanonicalIntervalForest:
   import:
     from: sktime.classification.interval_based
     class: CanonicalIntervalForest
+
+DrCIF:
+  # Diverse Representation Canonical Interval Forest
+  # An ensemble that combines different representations of time series data
+  # Good replacement for ProximityForest with improved performance
+  family: Interval
+  in_sets: [full, sktime]
+  params:
+    # Number of trees in the forest
+    n_estimators: 200
+    # Number of intervals to create
+    n_intervals: 50
+    # Attributes to extract from intervals
+    att_subsample_size: 10
+  import:
+    from: sktime.classification.interval_based
+    class: DrCIF
 
 ###############################################################################
 # DICTIONARY-BASED MODELS

@@ -1,4 +1,4 @@
-from typing import Any, Dict, Generator, Tuple, Union
+from typing import Any, Dict, Generator, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -28,7 +28,7 @@ def apply_model(
     cv_folds: int = 5,
     stratify: bool = True,
     random_state: int = 42,
-) -> Dict[str, Any]:
+) -> Tuple[Dict[str, Any], Optional[np.ndarray]]:
     """
     Apply a machine learning model to a dataset using cross-validation.
 
