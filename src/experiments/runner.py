@@ -1,12 +1,14 @@
 import os
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import mlflow
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator
 from sktime.classification.base import BaseClassifier
 
 from src.data import load_data, process_data
+from src.experiments.server import launch_server
 from src.modeling import apply_model, get_classifier_dict
 from src.utils import get_logger
 
@@ -25,6 +27,10 @@ class ExperimentRunner:
     It supports various experiment types like binary and multiclass classification
     with different sampling strategies and model selections.
     """
+
+    # Class variables to track MLflow server state
+    _mlflow_server_running = False
+    _MLFLOW_PORT = 5000
 
     def __init__(
         self,
@@ -105,45 +111,19 @@ class ExperimentRunner:
         )
         self.logger.info(f"  Stratify: {stratify}, Save results: {save_results}")
 
-    def _apply_model(
-        self,
-        data: Dict[str, Any],
-        model_name: str,
-        model: Union[BaseEstimator, BaseClassifier],
-    ) -> Dict[str, Any]:
-        """
-        Apply a machine learning model to a dataset using cross-validation.
+    @classmethod
+    def _ensure_mlflow_server(cls):
+        """Ensure MLflow server is running, start it if needed."""
+        if cls._mlflow_server_running:
+            return
 
-        This is a wrapper around the apply_model function in src.modeling.model
-        that provides the experiment runner's configuration.
-
-        Parameters:
-        -----------
-        data : Dict[str, Any]
-            Dictionary containing dataset information
-        model_name : str
-            Name of the machine learning model
-        model : Union[BaseEstimator, BaseClassifier]
-            Machine learning classifier model
-
-        Returns:
-        --------
-        Dict[str, Any]
-            Dictionary containing evaluation results
-        """
-        x_values = data["x_values"]
-        y_values = data["y_values"]
-
-        return apply_model(
-            model_name=model_name,
-            model=model,
-            x_values=x_values,
-            y_values=y_values,
-            dataset_name=data["name"],
-            cv_folds=self.cv_folds,
-            stratify=self.stratify,
-            random_state=self.random_seed,
-        )
+        try:
+            # Start the MLflow server using the imported function
+            launch_server(port=cls._MLFLOW_PORT)
+            cls._mlflow_server_running = True
+        except Exception as e:
+            print(f"Warning: Could not start MLflow server: {str(e)}")
+            print("Will try to connect to existing server...")
 
     def _load_data(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -300,7 +280,7 @@ class ExperimentRunner:
 
     def run(self) -> List[Dict[str, Any]]:
         """
-        Execute the complete experiment workflow.
+        Execute the complete experiment workflow with MLflow tracking.
 
         This method orchestrates the entire experiment pipeline:
         1. Loads and preprocesses the time series data
@@ -308,16 +288,23 @@ class ExperimentRunner:
         3. Initializes the selected machine learning models
         4. Evaluates each model on each dataset using cross-validation
         5. Collects and stores the results
-
-        The method handles the coordination between all components of the
-        experiment, ensuring proper data flow and result collection.
+        6. Tracks everything in MLflow
 
         Returns:
         --------
         List[Dict[str, Any]]
             List of dictionaries containing evaluation results for all
             model-dataset combinations in the experiment
+
+        Raises:
+        -------
+        RuntimeError
+            If MLflow server is not available
         """
+
+        # Ensure MLflow server is running
+        self._ensure_mlflow_server()
+
         # Load and preprocess data
         data = self._load_data()
         data = self._process_data(data)
@@ -330,18 +317,118 @@ class ExperimentRunner:
             self.model_selection, random_seed=self.random_seed, n_jobs=self.n_jobs
         )
 
-        # Run experiments for each combination of dataset and model
+        # Set up MLflow tracking - using the class-defined port
+        try:
+            mlflow.set_tracking_uri(f"http://localhost:{self._MLFLOW_PORT}")
+            mlflow.set_experiment(f"{self.experiment_type}")
+            self.logger.info("MLflow tracking initialized successfully")
+        except Exception as e:
+            self.logger.error(f"MLflow initialization failed: {str(e)}")
+            raise RuntimeError(
+                "MLflow server is not available. Please start the MLflow server before running experiments."
+            ) from e
+
+        # Initialize results list
         self.results = []
-        for data in experiment_data:
-            for model_name, model in experiment_models.items():
-                result, confusion_matrix = self._apply_model(data, model_name, model)
-                self.results.append(result)
 
-                # Save the confusion matrix if available
-                if confusion_matrix is not None and True:  # disable during debugging
-                    self._save_confusion_matrix(confusion_matrix, model_name)
+        # Create a parent run for the entire experiment
 
-        # Store results
+        # E X P E R I M E N T (first layer)
+
+        with mlflow.start_run(
+            run_name=f"{self.scenario_id}_{self.model_selection}"
+        ) as main_run:
+            # Log experiment configuration parameters
+            mlflow.log_params(
+                {
+                    "experiment_type": self.experiment_type,
+                    "model_selection": self.model_selection,
+                    "scenario_id": self.scenario_id,
+                    "target_length": self.target_length,
+                    "screw_positions": self.screw_positions,
+                    "cv_folds": self.cv_folds,
+                    "random_seed": self.random_seed,
+                    "n_jobs": self.n_jobs,
+                    "stratify": self.stratify,
+                }
+            )
+
+        # Process each dataset
+        for data_index, dataset in enumerate(experiment_data):
+            self.logger.info(
+                f"Processing {dataset['name']} ({data_index+1}/{len(experiment_data)})"
+            )
+
+            # D A T A S E T (second layer)
+
+            # Create a nested run for this dataset
+            with mlflow.start_run(run_name=dataset["name"], nested=True):
+
+                # Log dataset characteristics
+                mlflow.log_params(
+                    {
+                        "dataset_name": dataset["name"],
+                        "n_samples": len(dataset["x_values"]),
+                        "n_features": (
+                            dataset["x_values"].shape[1]
+                            if hasattr(dataset["x_values"], "shape")
+                            else None
+                        ),
+                        "class_balance": str(
+                            np.unique(dataset["y_values"], return_counts=True)[
+                                1
+                            ].tolist()
+                        ),
+                    }
+                )
+
+                # Process each model for this dataset
+                for model_name, model in experiment_models.items():
+                    self.logger.info(f"  Evaluating model: {model_name}")
+
+                    # M O D E L
+
+                    # Model evaluation with MLflow tracking
+                    with mlflow.start_run(run_name=model_name, nested=True):
+                        # Apply the model and get results
+                        result, confusion_matrix = self._apply_model(
+                            dataset, model_name, model
+                        )
+
+                        # Log the model and its metrics
+                        try:
+                            # Log model type/family information
+                            mlflow.log_param(
+                                "model_family", result.get("model_type", "unknown")
+                            )
+
+                            # Try to log the model itself if possible
+                            mlflow.sklearn.log_model(model, "model")
+                        except Exception as e:
+                            self.logger.warning(
+                                f"Could not log model artifact: {str(e)}"
+                            )
+
+                        # Log metrics
+                        for key, value in result.items():
+                            if isinstance(value, (int, float)) and not isinstance(
+                                value, bool
+                            ):
+                                mlflow.log_metric(key, value)
+                            elif isinstance(value, (str, bool)):
+                                mlflow.log_param(key, value)
+
+                        # Store confusion matrix as an artifact
+                        if confusion_matrix is not None:
+                            cm_path = f"{model_name}_cm.csv"
+                            pd.DataFrame(confusion_matrix).to_csv(cm_path, index=False)
+                            mlflow.log_artifact(cm_path)
+                            os.remove(cm_path)  # Clean up temp file
+
+                        # Add to legacy results collection
+                        self.results.append(result)
+
+        # Save consolidated results to CSV
         self._save_results_csv(self.results)
 
         return self.results

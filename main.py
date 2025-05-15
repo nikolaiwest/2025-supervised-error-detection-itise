@@ -14,11 +14,10 @@ OPTIONS = [
     # "multiclass_with_all",
 ]
 
-
 for option in OPTIONS:
     runner = ExperimentRunner(
         experiment_type=option,
-        model_selection="sklearn",
+        model_selection="fast",
         **DEFAULT_SETTINGS,
     )
     runner.run()

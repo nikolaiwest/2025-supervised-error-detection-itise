@@ -11,6 +11,9 @@ scripts/*
 !scripts/*.py
 notes.txt
 
+# Experiment tracking in mlflow
+src/experiments/server/mlartifacts/*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
