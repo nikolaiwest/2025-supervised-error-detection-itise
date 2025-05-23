@@ -1,0 +1,54 @@
+{
+  "group_1_glass_fiber_content": [
+    "101_glass-fiber-content-30",
+    "102_glass-fiber-content-28",
+    "103_glass-fiber-content-26",
+    "104_glass-fiber-content-24",
+    "105_glass-fiber-content-22",
+    "106_glass-fiber-content-20",
+    "107_glass-fiber-content-18"
+  ],
+  "group_2_recyclate_content": [
+    "201_recyclate-content-000",
+    "202_recyclate-content-010",
+    "203_recyclate-content-020",
+    "204_recyclate-content-030",
+    "205_recyclate-content-040",
+    "206_recyclate-content-050",
+    "207_recyclate-content-060",
+    "208_recyclate-content-070",
+    "209_recyclate-content-080",
+    "210_recyclate-content-090",
+    "211_recyclate-content-100"
+  ],
+  "group_3_switching_point": [
+    "301_switching-point-15-1",
+    "302_switching-point-16",
+    "303_switching-point-17",
+    "304_switching-point-18",
+    "305_switching-point-19",
+    "306_switching-point-15-2",
+    "307_switching-point-14",
+    "308_switching-point-13",
+    "309_switching-point-12",
+    "310_switching-point-11"
+  ],
+  "group_4_injection_velocity": [
+    "401_injection-velocity-60-1",
+    "402_injection-velocity-70",
+    "403_injection-velocity-80",
+    "404_injection-velocity-90",
+    "405_injection-velocity-100",
+    "406_injection-velocity-60-2",
+    "407_injection-velocity-50",
+    "408_injection-velocity-40",
+    "409_injection-velocity-30",
+    "410_injection-velocity-20"
+  ],
+  "group_5_mold_temperature": [
+    "501_mold-temperature-30",
+    "502_mold-temperature-35",
+    "503_mold-temperature-40",
+    "504_mold-temperature-45"
+  ]
+}

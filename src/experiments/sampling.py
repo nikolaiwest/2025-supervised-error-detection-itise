@@ -1,61 +1,20 @@
 import json
 import os
-from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Tuple
 
 import numpy as np
 
+from src.utils.exceptions import SamplingError
 
-class SamplingError(Exception):
-    """Raised when a dataset cannot be properly created due to sampling issues."""
-
-    pass
+from .experiment_dataset import ExperimentDataset
 
 
-@dataclass
-class ExperimentDataset:
-    """Standardized dataset representation for all experiment types."""
-
-    # Required core fields (always present)
-    name: str
-    experiment_type: str
-    x_values: np.ndarray  # Consistent naming for model input
-    y_values: np.ndarray  # Consistent naming for target labels
-
-    # Metadata fields (can be None if not applicable)
-    class_name: Optional[str] = None  # For all experiment types
-    group_name: Optional[str] = None  # For group-based experiments
-
-    # Class information
-    num_classes: int = 2  # Default for binary, overridden for multiclass
-    class_mapping: Optional[Dict] = None  # Maps original class values to numeric IDs
-    class_names: Optional[Dict] = None  # Maps numeric IDs to human-readable names
-
-    # Sample counts
-    normal_samples: Optional[int] = None
-    faulty_samples: Optional[int] = None
-    class_distribution: Optional[Dict] = None  # Count of samples per class
-    imbalance_ratio: Optional[float] = None
-
-    # Additional metadata
-    description: Optional[str] = None  # Human-readable description
-    additional_info: Optional[Dict] = None  # Any other experiment-specific info
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary, excluding None values."""
-        result = {}
-        for k, v in asdict(self).items():
-            if v is not None:
-                result[k] = v
-        return result
-
-
-def get_sampling_data(
-    data: Tuple[np.ndarray, np.ndarray, np.ndarray],
-    experiment_type: str,
+def sample_datasets(
+    processed_data: Tuple[np.ndarray, np.ndarray, np.ndarray],
+    experiment_name: str,
     scenario_id: str,
-) -> List[Dict[str, Any]]:
+) -> List[ExperimentDataset]:
     """
     Generate datasets for different experiment configurations based on experiment type.
 
@@ -63,83 +22,70 @@ def get_sampling_data(
     -----------
     data : Tuple[np.ndarray, np.ndarray, np.ndarray]
         Tuple of (torque_values, class_values, scenario_condition)
-    experiment_type : str
+    experiment_name : str
         Type of experiment to run (binary_vs_ref, binary_vs_all, multiclass_all, multiclass_group)
     scenario_id : str, optional
         Scenario identifier used to load appropriate configurations
-
-    Returns:
-    --------
-    List[Dict[str, Any]]: List of dataset configurations, each containing:
-        - 'name': Unique identifier for the dataset
-        - 'x_values': Feature data (torque values)
-        - 'y_values': Target labels
-        - Additional metadata specific to the experiment type
     """
+    torque, classes, conditions = processed_data
+
     # Dispatch to the appropriate sampling strategy based on experiment type
-    if experiment_type == "binary_vs_ref":
-        return _get_binary_vs_ref_data(data[0], data[1], data[2])
-    elif experiment_type == "binary_vs_all":
-        return _get_binary_vs_all_data(data[0], data[1], data[2])
-    elif experiment_type == "multiclass_with_groups":
-        return _get_multiclass_with_groups(data[0], data[1], data[2], scenario_id)
-    elif experiment_type == "multiclass_with_all":
-        return _get_multiclass_with_all(data[0], data[1], data[2])
+    if experiment_name == "binary_vs_ref":
+        return _get_binary_vs_ref_data(torque, classes, conditions)
+    elif experiment_name == "binary_vs_all":
+        return _get_binary_vs_all_data(torque, classes, conditions)
+    elif experiment_name == "multiclass_with_groups":
+        return _get_multiclass_with_groups(torque, classes, conditions, scenario_id)
+    elif experiment_name == "multiclass_with_all":
+        return _get_multiclass_with_all(torque, classes, conditions)
     else:
-        raise ValueError(f"Unknown experiment type: {experiment_type}")
+        raise ValueError(f"Unknown experiment type: {experiment_name}")
 
 
 def _get_binary_vs_ref_data(
     torque_values: np.ndarray, class_values: np.ndarray, scenario_condition: np.ndarray
-) -> List[Dict[str, Any]]:
+) -> List[ExperimentDataset]:
     """Generate datasets for binary classification of errors vs reference in one class."""
-    datasets = []
 
-    for class_value in sorted(set(class_values)):
-        # Filter data for this class
-        class_mask = class_values == class_value
-        filtered_torque_values = torque_values[class_mask]
+    # Initialize a list to return the experiment datasets
+    datasets: List[ExperimentDataset] = []
+
+    # Get a sorted list of all unique class values in the experiment
+    unique_class_names = [str(class_name) for class_name in sorted(set(class_values))]
+
+    # Iterate the class names (which now become the dataset names)
+    for dataset_name in unique_class_names:
+
+        # Filter data for just this class
+        class_mask = class_values == dataset_name
+        x_values = torque_values[class_mask]
         filtered_condition = scenario_condition[class_mask]
 
-        # Get indices of normal and faulty samples
+        # Get indices of normal and faulty samples and get counts
         normal_mask = filtered_condition == "normal"
         faulty_mask = filtered_condition != "normal"  # == "faulty"
-        n_normal = np.sum(normal_mask)
-        n_faulty = np.sum(faulty_mask)
+        normal_counts = int(np.sum(normal_mask))
+        faulty_counts = int(np.sum(faulty_mask))
 
-        # Check for classes with insufficient samples
-        if n_normal == 0 or n_faulty == 0:
-            raise SamplingError(
-                f"Could not create vs_all dataset for class {class_value} due to missing samples "
-                f"(n_normal={n_normal}, n_faulty={n_faulty})"
-            )
-
-        # Create binary labels (0 for normal, 1 for faulty) for modeling
+        # Create binary labels (0 for normal, 1 for faulty) for easier modeling
         y_values = np.zeros(len(filtered_condition), dtype=int)
         y_values[faulty_mask] = 1
 
-        # Calculate a few simple metrics for logging
-        class_ratio = n_normal / n_faulty if n_faulty > 0 else float("inf")
-        class_distribution = {"normal": int(n_normal), "faulty": int(n_faulty)}
-        class_names = {0: "normal", 1: "faulty"}
-
         # Create dataset using standardized format
         dataset = ExperimentDataset(
-            name=f"binary_vs_ref_{class_value}",
-            experiment_type="binary_vs_ref",
-            x_values=filtered_torque_values,  # Consistent field name
-            y_values=y_values,  # Consistent field name
-            class_name=class_value,  # Specific class being analyzed
-            num_classes=2,  # Binary classification
-            class_names=class_names,  # Human-readable class names
-            normal_samples=n_normal,
-            faulty_samples=n_faulty,
-            class_distribution=class_distribution,
-            imbalance_ratio=class_ratio,
-            description=f"Binary classification of normal vs. faulty samples for class {class_value}",
+            name=dataset_name,
+            x_values=x_values,
+            y_values=y_values,
+            experiment_name="binary_vs_ref",
+            class_count=2,  # Binary classification
+            class_names={0: "normal", 1: "faulty"},
+            normal_counts=normal_counts,
+            faulty_counts=faulty_counts,
+            faulty_ratio=round(faulty_counts / (faulty_counts + normal_counts), 4),
+            description=f"Binary classification of {normal_counts} normal and {faulty_counts} faulty samples for class '{dataset_name}'",
         )
 
-        datasets.append(dataset.to_dict())
+        datasets.append(dataset)
 
     # Check if we have any datasets
     if not datasets:
@@ -152,7 +98,7 @@ def _get_binary_vs_ref_data(
 
 def _get_binary_vs_all_data(
     torque_values: np.ndarray, class_values: np.ndarray, scenario_condition: np.ndarray
-) -> List[Dict[str, Any]]:
+) -> List[ExperimentDataset]:
     """Generate datasets for binary classification comparing each class's faulty samples vs ALL normal samples."""
     datasets = []
 
@@ -195,8 +141,8 @@ def _get_binary_vs_all_data(
 
         # Create dataset using standardized format
         dataset = ExperimentDataset(
-            name=f"binary_vs_all_{class_value}",
-            experiment_type="binary_vs_all",
+            name=class_value,
+            experiment_name="binary_vs_all",
             x_values=x_combined,
             y_values=y_values,
             class_name=class_value,
@@ -219,35 +165,8 @@ def _get_multiclass_with_groups(
     class_values: np.ndarray,
     scenario_condition: np.ndarray,
     scenario_id: str,
-) -> List[Dict[str, Any]]:
-    """
-    Generate datasets for multi-class classification within error groups.
-
-    Groups are loaded from a JSON configuration file based on the scenario ID.
-
-    Parameters:
-    -----------
-    torque_values : np.ndarray
-        Time series data with shape (n_samples, n_timestamps)
-    class_values : np.ndarray
-        Class labels for each sample
-    scenario_condition : np.ndarray
-        Additional categorical information for each sample (normal/faulty)
-    scenario_id : str, optional
-        Scenario identifier used to load the appropriate group configuration (default: "s04")
-
-    Returns:
-    --------
-    List[Dict[str, Any]]
-        List of dataset configurations for multiclass classification within groups
-
-    Raises:
-    -------
-    SamplingError
-        If no valid datasets could be created
-    FileNotFoundError
-        If the group configuration file for the scenario cannot be found
-    """
+) -> List[ExperimentDataset]:
+    """Generate datasets for multi-class classification within error groups."""
     datasets = []
 
     # Load error groups from JSON file based on scenario ID
@@ -311,11 +230,10 @@ def _get_multiclass_with_groups(
 
         # Create dataset using standardized format
         dataset = ExperimentDataset(
-            name=f"multiclass_{group_name}",
-            experiment_type="multiclass_group",
+            name=group_name,
+            experiment_name="multiclass_with_groups",
             x_values=filtered_torque_values,
             y_values=y_values,
-            group_name=group_name,
             num_classes=len(group_errors) + 1,  # Normal + all classes in group
             class_mapping=class_mapping,
             class_names=class_names,
@@ -340,7 +258,7 @@ def _get_multiclass_with_groups(
 
 def _get_multiclass_with_all(
     torque_values: np.ndarray, class_values: np.ndarray, scenario_condition: np.ndarray
-) -> List[Dict[str, Any]]:
+) -> List[ExperimentDataset]:
     """Generate dataset for multi-class classification with one class for normals and N classes for errors."""
     # Map class values to integers (1-25 or however many classes)
     unique_classes = sorted(set(class_values))
@@ -392,8 +310,8 @@ def _get_multiclass_with_all(
 
     # Create dataset using standardized format
     dataset = ExperimentDataset(
-        name="multiclass_all_errors",
-        experiment_type="multiclass_all",
+        name="all_errors",
+        experiment_name="multiclass_with_all",
         x_values=torque_values,
         y_values=y_values,
         num_classes=len(unique_classes) + 1,  # Normal + all error classes
@@ -407,3 +325,12 @@ def _get_multiclass_with_all(
     )
 
     return [dataset.to_dict()]  # Return as a list for consistent interface
+
+
+"""
+TODO: 
+- In a future release, this should be moved to a separate module sampling/
+- This way, we can start to implement s05 and s06 as well 
+- The scenarios are currently not compatible because s04 has normal and faulty in a single class
+- For all other scenarios, we can use the "is normal" tag in the class yml files (pyscrew)
+"""

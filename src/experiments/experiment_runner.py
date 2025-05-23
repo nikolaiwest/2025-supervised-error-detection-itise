@@ -1,21 +1,29 @@
 from typing import Any, Dict, List, Tuple, Union
 
+import numpy as np
 from sklearn.base import BaseEstimator
+from sklearn.model_selection import KFold, StratifiedKFold
 from sktime.classification.base import BaseClassifier
 
 from src.data import load_data, process_data
-from src.evaluation.results import DatasetResult, ExperimentResult, ModelResult
-from src.experiments.server import launch_server
-from src.modeling import apply_model, get_classifier_dict
+from src.evaluation.results import (
+    DatasetResult,
+    ExperimentResult,
+    FoldResult,
+    ModelResult,
+)
+from src.mlflow import MLflowManager, launch_server
+from src.models import get_classifier_dict
 from src.utils import get_logger
 
-from .exceptions import (
+from ..utils.exceptions import (
     DatasetPreparationError,
     FatalExperimentError,
     ModelEvaluationError,
 )
-from .mlflow_manager import MLflowManager
-from .sampling import get_sampling_data
+from .experiment_dataset import ExperimentDataset
+from .sampling import sample_datasets
+from .training import train_single_fold
 
 
 class ExperimentRunner:
@@ -23,7 +31,7 @@ class ExperimentRunner:
     Orchestrates ML experiments on time series data with MLflow tracking.
 
     Supports binary/multiclass classification with cross-validation and
-    hierarchical result tracking (Experiment -> Dataset -> Model -> Fold).
+    4-level hierarchical result tracking (Experiment -> Dataset -> Model -> Fold).
     Handles partial failures gracefully and provides comprehensive logging.
     """
 
@@ -33,7 +41,7 @@ class ExperimentRunner:
 
     def __init__(
         self,
-        experiment_type: str,
+        experiment_name: str,
         model_selection: str,
         scenario_id: str = "s04",
         target_length: int = 2000,
@@ -46,7 +54,7 @@ class ExperimentRunner:
     ):
         """Initialize experiment runner with configuration parameters."""
         # Core configuration
-        self.experiment_type = experiment_type
+        self.experiment_name = experiment_name
         self.model_selection = model_selection
         self.scenario_id = scenario_id
 
@@ -68,21 +76,13 @@ class ExperimentRunner:
 
         # Initialize experiment result container
         self.experiment_result = ExperimentResult(
-            experiment_type=experiment_type,
-            experiment_config={
-                "model_selection": model_selection,
-                "scenario_id": scenario_id,
-                "target_length": target_length,
-                "screw_positions": screw_positions,
-                "cv_folds": cv_folds,
-                "random_seed": random_seed,
-                "n_jobs": n_jobs,
-                "stratify": stratify,
-            },
+            experiment_name=self.experiment_name,
+            model_selection=self.model_selection,
+            scenario_id=self.scenario_id,
         )
 
         # Instance variables for stateful design
-        self.datasets: List[Dict[str, Any]] = []
+        self.datasets: List[ExperimentDataset] = []
         self.models: Dict[str, Any] = {}
 
         self._log_initialization()
@@ -104,7 +104,7 @@ class ExperimentRunner:
 
     def _log_initialization(self) -> None:
         """Log experiment configuration for debugging."""
-        self.logger.info(f"Initializing {self.experiment_type} experiment")
+        self.logger.info(f"Initializing {self.experiment_name} experiment")
         self.logger.info(
             f"  Dataset: {self.scenario_id}, Models: {self.model_selection}"
         )
@@ -113,7 +113,7 @@ class ExperimentRunner:
         )
         self.logger.info(f"  Stratify: {self.stratify}, n_jobs: {self.n_jobs}")
 
-    def _setup_experiment(self) -> None:
+    def _setup_experiment_tracking(self) -> None:
         """Set up MLflow server and tracking."""
         self.logger.info("Setting up experiment environment...")
 
@@ -121,9 +121,9 @@ class ExperimentRunner:
         self._ensure_mlflow_server()
 
         # Setup MLflow tracking
-        self.mlflow_manager.setup_tracking(self.experiment_type)
+        self.mlflow_manager.setup_tracking(self.experiment_name)
 
-    def _setup_datasets(self) -> None:
+    def _setup_datasets_and_models(self) -> None:
         """Load data, apply preprocessing, and initialize models."""
         try:
             self.logger.info("Loading and preprocessing data...")
@@ -135,8 +135,10 @@ class ExperimentRunner:
             processed_data = process_data(raw_data, target_length=200)
 
             # Generate datasets based on experiment type (binary/multiclass)
-            self.datasets = get_sampling_data(
-                processed_data, self.experiment_type, self.scenario_id
+            self.datasets = sample_datasets(
+                processed_data=processed_data,
+                experiment_name=self.experiment_name,
+                scenario_id=self.scenario_id,
             )
 
             # Initialize ML models with experiment configuration
@@ -151,186 +153,230 @@ class ExperimentRunner:
         except Exception as e:
             raise DatasetPreparationError(f"Failed to prepare data: {str(e)}") from e
 
-    def _process_experiment(self) -> None:
-        """Execute main experiment loop with MLflow tracking."""
-        self.logger.info("Starting experiment execution...")
+    def _update_split_method(self, dataset: ExperimentDataset):
+        """Set up cross-validation with appropriate split strategy."""
+        split_params = {
+            "n_splits": self.cv_folds,
+            "shuffle": True,
+            "random_state": self.random_seed,
+        }
+        if self.stratify:
+            cv = StratifiedKFold(**split_params)
+            split_method = lambda: cv.split(dataset.x_values, dataset.y_values)
+            self.logger.debug(f"Using StratifiedKFold with {self.cv_folds} splits")
+        else:
+            cv = KFold()
+            split_method = lambda: cv.split(dataset.x_values)
+            self.logger.debug(f"Using regular KFold with {self.cv_folds} splits")
 
-        # Start main experiment run
-        main_run_id = self.mlflow_manager.log_experiment_start(self.experiment_result)
+        self.split_method = split_method
+
+    def _run_experiment(self) -> None:
+        """Execute main experiment loop with clean start/update MLflow pattern."""
+
+        # START: Initialize main experiment run
+        self.mlflow_manager.start_experiment_run(self.experiment_result)
 
         try:
             # Process each dataset with all models
-            for dataset_idx, dataset_dict in enumerate(self.datasets):
-                self.logger.info(
-                    f"Processing dataset {dataset_idx + 1}/{len(self.datasets)}: {dataset_dict['name']}"
-                )
+            for dataset_idx, dataset in enumerate(self.datasets):
+                progress = f"{dataset_idx + 1}/{len(self.datasets)}"
+                self.logger.info(f"Processing dataset {progress}: {dataset.name}")
 
-                dataset_result = self._process_single_dataset(dataset_dict)
-                self.experiment_result.add_dataset_result(dataset_result)
+                dataset_result = self._run_dataset(dataset)
+                self.experiment_result.add_result(dataset_result)
+
+                # UPDATE: Update experiment progress after each dataset
+                self.mlflow_manager.update_experiment_run(self.experiment_result)
+
+            # FINALIZE: Mark experiment as complete
+            self.experiment_result.finalize()
+            self.mlflow_manager.finalize_experiment_run(self.experiment_result)
 
         finally:
             self.mlflow_manager.end_run()
 
-    def _process_single_dataset(self, dataset_dict: Dict[str, Any]) -> DatasetResult:
-        """Process all models on a single dataset with error recovery."""
+    def _run_dataset(self, dataset: ExperimentDataset) -> DatasetResult:
+        """Process all models on a single dataset."""
 
-        # Create DatasetResult with metadata (exclude actual data arrays)
+        # Initialize dataset result
         dataset_result = DatasetResult(
-            dataset_name=dataset_dict["name"],
-            dataset_info={
-                k: v
-                for k, v in dataset_dict.items()
-                if k not in ["x_values", "y_values"]  # Exclude data arrays
+            dataset_name=dataset.name,
+            dataset_tags={
+                key: value
+                for key, value in dataset.to_dict().items()
+                if key not in ["name", "x_values", "y_values"]
             },
         )
 
-        # Start dataset-level MLflow run
-        dataset_run_id = self.mlflow_manager.log_dataset_start(dataset_result)
+        # START: Initialize dataset run
+        self.mlflow_manager.start_dataset_run(dataset_result)
+
+        # Update the split method for the current dataset
+        self._update_split_method(dataset)
 
         try:
-            # Process all models, handling individual failures gracefully
-            successful_models, failed_models = self._process_all_models(dataset_dict)
+            # Process all models for this dataset
+            for model_idx, model_name in enumerate(self.models):
+                progress = f"{model_idx + 1}/{len(self.models)}"
+                self.logger.info(f"  Applying model {progress}: {model_name}")
 
-            # Add successful results to dataset
-            for model_result in successful_models:
-                dataset_result.add_model_result(model_result)
+                try:
+                    model_result = self._run_model(dataset, model_name)
+                    dataset_result.add_result(model_result)
 
-            # Log any model failures (but continue experiment)
-            if failed_models:
-                self.logger.warning(
-                    f"Failed models on {dataset_dict['name']}: "
-                    f"{[name for name, _ in failed_models]}"
-                )
+                    # Log success
+                    f1_score = model_result.get_mean_metric("f1_score")
+                    self.logger.info(f"    {model_name}: f1_score = {f1_score:.3f}")
+
+                except ModelEvaluationError as e:
+                    self.logger.warning(f"    {model_name}: FAILED - {str(e)}")
+                    # Continue with next model
+
+            # UPDATE: Update dataset aggregates after all models complete
+            self.mlflow_manager.update_dataset_run(dataset_result)
 
         finally:
             self.mlflow_manager.end_run()
 
         return dataset_result
 
-    def _process_all_models(
-        self, dataset_dict: Dict[str, Any]
-    ) -> Tuple[List[ModelResult], List[Tuple[str, str]]]:
-        """Process all models on dataset, collecting successes and failures."""
+    def _run_model(self, dataset: ExperimentDataset, model_name: str) -> ModelResult:
+        """Process all folds of a model for a given dataset."""
 
-        successful_results = []
-        failed_models = []
+        # Initialize model result
+        model_result = ModelResult(
+            model_name=model_name,
+            dataset_name=dataset.name,
+        )
 
-        for model_name, model in self.models.items():
-            try:
-                self.logger.info(f"  Evaluating model: {model_name}")
+        # START: Initialize model run
+        self.mlflow_manager.start_model_run(model_result)
 
-                # Evaluate single model with cross-validation
-                model_result = self._evaluate_single_model(
-                    model_name, model, dataset_dict
-                )
-                successful_results.append(model_result)
-
-                # Log results to MLflow
-                self.mlflow_manager.log_model_evaluation(model_result)
-
-            except ModelEvaluationError as e:
-                self.logger.error(f"Model {model_name} failed: {str(e)}")
-                failed_models.append((model_name, str(e)))
-                # Continue with remaining models
-
-        return successful_results, failed_models
-
-    def _evaluate_single_model(
-        self,
-        model_name: str,
-        model: Union[BaseEstimator, BaseClassifier],
-        dataset_dict: Dict[str, Any],
-    ) -> ModelResult:
-        """Evaluate model with cross-validation, handling failures gracefully."""
+        # Get data and model
+        x_values = dataset.x_values
+        y_values = dataset.y_values
+        model = self.models[model_name]
 
         try:
-            # Apply model with cross-validation (returns ModelResult)
-            model_result = apply_model(
-                model_name=model_name,
-                model=model,
-                x_values=dataset_dict["x_values"],
-                y_values=dataset_dict["y_values"],
-                dataset_name=dataset_dict["name"],
-                cv_folds=self.cv_folds,
-                stratify=self.stratify,
-                random_state=self.random_seed,
-            )
+            # Process all folds for this model
+            fold_index = 0
+            for train_idx, test_idx in self.split_method():
+                x_values_split = x_values[train_idx], x_values[test_idx]
+                y_values_split = y_values[train_idx], y_values[test_idx]
 
-            # Log performance for quick monitoring
-            f1_score = model_result.metrics.get("f1_score", 0)
-            self.logger.info(f"    {model_name}: f1_score = {f1_score:.3f}")
+                # Process single fold
+                fold_result = self._run_fold(
+                    model=model,
+                    x_values_split=x_values_split,
+                    y_values_split=y_values_split,
+                    fold_index=fold_index,
+                )
 
-            return model_result
+                # Only add successful fold results (skip failed folds as requested)
+                if "error" not in fold_result.metadata:
+                    model_result.add_result(fold_result)
+
+                    # UPDATE: Update model averages after each successful fold
+                    model_result._compute_aggregated_metrics()
+                    model_result._compute_aggregated_confusion_matrix()
+                    self.mlflow_manager.update_model_run(model_result)
+
+                fold_index += 1
+
+            # Check if we have any successful folds
+            if not model_result.fold_results:
+                raise ModelEvaluationError("All folds failed for this model")
 
         except Exception as e:
+            self.logger.error(f"Error running model {model_name}: {str(e)}")
             raise ModelEvaluationError(
-                f"Failed to evaluate {model_name} on {dataset_dict['name']}: {str(e)}"
+                f"Failed to evaluate {model_name}: {str(e)}"
             ) from e
+
+        finally:
+            self.mlflow_manager.end_run()
+
+        return model_result
+
+    def _run_fold(
+        self,
+        model: Union[BaseEstimator, BaseClassifier],
+        x_values_split: Tuple[np.ndarray, np.ndarray],
+        y_values_split: Tuple[np.ndarray, np.ndarray],
+        fold_index: int,
+    ) -> FoldResult:
+        """Process a single cross-validation fold."""
+
+        # START: Initialize fold run
+        self.mlflow_manager.start_fold_run(fold_index)
+
+        try:
+            # Delegate actual training to training module
+            from .training import train_single_fold
+
+            x_train, x_test = x_values_split
+            y_train, y_test = y_values_split
+
+            fold_result = train_single_fold(
+                model=model,
+                x_train=x_train,
+                x_test=x_test,
+                y_train=y_train,
+                y_test=y_test,
+                fold_index=fold_index,
+            )
+
+            # UPDATE: Update fold run with results
+            self.mlflow_manager.update_fold_run(fold_result)
+
+            # Log progress
+            f1_score = fold_result.metrics.get("f1_score", 0)
+            self.logger.debug(f"      Fold {fold_index}: f1_score = {f1_score:.3f}")
+
+            return fold_result
+
+        finally:
+            self.mlflow_manager.end_run()
+
+    def _log_fold_to_mlflow(self, fold_result: "FoldResult") -> None:
+        """Log fold result to MLflow if tracking is active."""
+        try:
+            # Only log if MLflow manager is available and there's an active run
+            if hasattr(self, "mlflow_manager") and self.mlflow_manager:
+                self.mlflow_manager.log_fold_result(fold_result)
+        except Exception as e:
+            self.logger.debug(f"Failed to log fold to MLflow: {str(e)}")
+            # Don't fail the fold if MLflow logging fails
 
     def _evaluate_experiment(self) -> None:
         """Generate experiment summary and log best performers."""
         self.logger.info("Evaluating experiment results...")
 
-        # Calculate success statistics
-        total_evaluations = sum(
-            len(dr.model_results) for dr in self.experiment_result.dataset_results
-        )
-
-        successful_evaluations = sum(
-            1
-            for dr in self.experiment_result.dataset_results
-            for mr in dr.model_results
-            if mr.metrics  # Has metrics = successful evaluation
-        )
+        # Finalize experiment timing
+        self.experiment_result.finalize()
 
         # Log experiment summary
         self.logger.info(f"Experiment completed:")
         self.logger.info(
             f"  Total datasets: {len(self.experiment_result.dataset_results)}"
         )
-        self.logger.info(
-            f"  Successful evaluations: {successful_evaluations}/{total_evaluations}"
-        )
-
-        # Log best performing models for each dataset
-        self._log_best_performers()
-
-    def _log_best_performers(self) -> None:
-        """Log the best performing model for each dataset."""
-
-        for dataset_result in self.experiment_result.dataset_results:
-            if not dataset_result.model_results:
-                continue
-
-            # Find best model by F1 score
-            best_model = max(
-                dataset_result.model_results,
-                key=lambda mr: mr.metrics.get("f1_score", 0),
-            )
-
-            f1_score = best_model.metrics.get("f1_score", 0)
-            self.logger.info(
-                f"  {dataset_result.dataset_name}: {best_model.model_name} (f1_score: {f1_score:.3f})"
-            )
 
     def run(self) -> ExperimentResult:
         """
         Execute complete experiment workflow.
 
-        Returns hierarchical results with statistical analysis across
-        all models and datasets.
+        Returns hierarchical results with 4-level analysis:
+        Experiment -> Dataset -> Model -> Fold
         """
         try:
-            # Setup datasets and models
-            self._setup_datasets()
+            self._setup_datasets_and_models()
+            self._setup_experiment_tracking()
 
-            # Setup experiment environment
-            self._setup_experiment()
+            # Execute experiment with real-time logging
+            self._run_experiment()
 
-            # Execute experiment
-            self._process_experiment()
-
-            # Generate summary and analysis
+            # Generate final summary
             self._evaluate_experiment()
 
             return self.experiment_result
@@ -338,7 +384,7 @@ class ExperimentRunner:
         except FatalExperimentError:
             raise  # Re-raise fatal errors
         except Exception as e:
-            # Wrap unexpected errors as fatal
+
             raise FatalExperimentError(
                 f"Unexpected error in experiment: {str(e)}"
-            ) from e
+            ) from e  # Wrap unexpected errors as fatal

@@ -27,6 +27,9 @@ class MLflowManager:
         try:
             mlflow.set_tracking_uri(f"http://localhost:{self.port}")
             mlflow.set_experiment(experiment_name)
+            # Disable auto-logging for explicit control
+            mlflow.autolog(disable=True)
+            mlflow.sklearn.autolog(disable=True)
             self.logger.info(f"MLflow tracking initialized for '{experiment_name}'")
         except Exception as e:
             raise FatalExperimentError(
