@@ -1,7 +1,7 @@
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
 
-def evaluate_model(y_true, y_pred, experiment_type=None):
+def apply_metrics(y_true, y_pred, experiment_name=None):
     """
     Evaluate model performance for classification using direct metrics.
 
@@ -11,7 +11,7 @@ def evaluate_model(y_true, y_pred, experiment_type=None):
         Ground truth labels
     y_pred : array-like
         Predicted labels
-    experiment_type : str, optional
+    experiment_name : str, optional
         Type of experiment ('binary_vs_ref', 'binary_vs_all', 'multiclass_group', 'multiclass_all')
         Used to determine appropriate metric parameters
 
