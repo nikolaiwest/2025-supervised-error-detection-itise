@@ -1,9 +1,10 @@
 import os
 from typing import Optional
 
-import mlflow
+import numpy as np
 import pandas as pd
 
+import mlflow
 from src.evaluation.results import (
     DatasetResult,
     ExperimentResult,
@@ -15,7 +16,7 @@ from src.utils.exceptions import FatalExperimentError
 
 
 class MLflowManager:
-    """Handles MLflow tracking for hierarchical experiment runs with real-time fold logging."""
+    """Handles MLflow tracking with clean start/update pattern for 4-level hierarchy."""
 
     def __init__(self, port: int = 5000):
         self.port = port
@@ -33,146 +34,266 @@ class MLflowManager:
                 "Please ensure MLflow server is running."
             ) from e
 
-    def start_main_run(self, experiment_result: ExperimentResult) -> None:
-        """Start main experiment run and log configuration."""
+    # ================================
+    # START METHODS - Initialize runs
+    # ================================
 
-        # Generate run name from inital experiment result
+    def start_experiment_run(self, experiment_result: ExperimentResult) -> None:
+        """Initialize main experiment run with basic structure."""
         scenario_id = experiment_result.get_scenario_id()
         model_selection = experiment_result.get_model_selection()
         run_name = f"run_{scenario_id}_{model_selection}"
 
-        # Start the mlflow run (at root level aka not nested)
-        run_description = "Parent run for all datasets and models in the experiment."
-        mlflow.start_run(run_name=run_name, description=run_description)
-        mlflow.set_tags(experiment_result.get_tags())
+        mlflow.start_run(run_name=run_name, nested=False)
 
-        self.logger.info(f"Started main run for the experiment: '{run_name}'")
+        # Set initial tags
+        mlflow.set_tags(
+            {
+                "experiment_type": experiment_result.experiment_name,
+                "scenario_id": scenario_id,
+                "model_selection": model_selection,
+                "start_time": experiment_result.start_time,
+                "status": "running",
+                "completed_datasets": "0",
+                "trained_models": "0",
+            }
+        )
 
-    def log_dataset_start(self, dataset_result: DatasetResult) -> str:
-        """Start nested dataset run and log dataset metadata."""
-        run = mlflow.start_run(run_name=dataset_result.dataset_name, nested=True)
+        self.logger.info(f"Started experiment run: '{run_name}'")
 
-        # Log dataset characteristics
-        mlflow.log_params(dataset_result.get_mlflow_params())
-        mlflow.log_metrics(dataset_result.get_mlflow_metrics())
+    def start_dataset_run(self, dataset_result: DatasetResult) -> None:
+        """Initialize dataset run with metadata."""
+        run_name = dataset_result.dataset_name
+        dataset_tags = dataset_result.get_tags()
 
-        for key, value in dataset_result.get_mlflow_tags().items():
-            mlflow.set_tag(key, value)
+        mlflow.start_run(run_name=run_name, nested=True)
+        mlflow.set_tags(dataset_tags)
 
-        self.logger.debug(f"Started dataset run: {dataset_result.dataset_name}")
-        return run.info.run_id
+        # Initialize placeholder metrics (will be updated after models complete)
+        mlflow.log_metrics(
+            {
+                "best_f1_score": 0.0,
+                "best_accuracy": 0.0,
+                "avg_f1_score": 0.0,
+                "avg_accuracy": 0.0,
+                "models_completed": 0,
+            }
+        )
 
-    def log_model_start(self, model_name: str, dataset_name: str) -> str:
-        """Start nested model run for fold logging."""
-        run = mlflow.start_run(run_name=model_name, nested=True)
+        self.logger.debug(f"Started dataset run: {run_name}")
 
-        # Log basic model info
-        mlflow.log_params({"model_name": model_name, "dataset_name": dataset_name})
+    def start_model_run(self, model_result: ModelResult) -> None:
+        """Initialize model run with placeholder metrics."""
+        run_name = model_result.model_name
 
-        mlflow.set_tag("evaluation_phase", "fold_by_fold")
+        mlflow.start_run(run_name=run_name, nested=True)
 
-        self.logger.debug(f"Started model run: {model_name}")
-        return run.info.run_id
+        # Initialize with placeholder metrics (will be updated after each fold)
+        mlflow.log_metrics(
+            {
+                "f1_score": 0.0,
+                "accuracy": 0.0,
+                "precision": 0.0,
+                "recall": 0.0,
+                "folds_completed": 0,
+            }
+        )
 
-    def log_fold_result(
-        self, fold_result: FoldResult, model_name: str, dataset_name: str
-    ) -> Optional[str]:
-        """
-        Log individual fold result in real-time.
+        # Log model metadata
+        mlflow.log_params(
+            {
+                "model_name": model_result.model_name,
+                "dataset_name": model_result.dataset_name,
+            }
+        )
 
-        This creates a nested run under the current model run and logs all fold metrics.
-        """
+        self.logger.debug(f"Started model run: {run_name}")
+
+    def start_fold_run(self, fold_index: int) -> None:
+        """Initialize fold run structure."""
+        run_name = f"fold_{fold_index}"
+
+        mlflow.start_run(run_name=run_name, nested=True)
+
+        # Log fold parameters
+        mlflow.log_params({"fold_index": fold_index, "fold_type": "cross_validation"})
+
+        self.logger.debug(f"Started fold run: {run_name}")
+
+    # ================================
+    # UPDATE METHODS - Push results
+    # ================================
+
+    def update_fold_run(self, fold_result: FoldResult) -> None:
+        """Update fold run with actual results after fold completion."""
         try:
-            fold_run_name = f"fold_{fold_result.fold_index}"
+            # Log fold metrics
+            mlflow.log_metrics(fold_result.get_mlflow_metrics())
 
-            with mlflow.start_run(run_name=fold_run_name, nested=True):
-                # Log fold parameters
-                mlflow.log_params(fold_result.get_mlflow_params())
+            # Log fold parameters
+            mlflow.log_params(fold_result.get_mlflow_params())
 
-                # Log fold metrics
-                mlflow.log_metrics(fold_result.get_mlflow_metrics())
+            # Log confusion matrix as artifact
+            try:
+                confusion_matrix = fold_result.get_confusion_matrix()
+                if confusion_matrix is not None:
+                    cm_path = f"fold_{fold_result.fold_index}_cm.csv"
+                    pd.DataFrame(confusion_matrix).to_csv(cm_path, index=False)
+                    mlflow.log_artifact(cm_path)
+                    os.remove(cm_path)  # Clean up
+            except Exception as e:
+                self.logger.warning(f"Failed to log fold confusion matrix: {str(e)}")
 
-                # Log fold tags
-                mlflow.set_tag("fold_index", str(fold_result.fold_index))
-                mlflow.set_tag("model_name", model_name)
-                mlflow.set_tag("dataset_name", dataset_name)
-
-                # Log confusion matrix if available
-                try:
-                    confusion_matrix = fold_result.get_confusion_matrix()
-                    if confusion_matrix is not None:
-                        cm_path = f"fold_{fold_result.fold_index}_cm.csv"
-                        pd.DataFrame(confusion_matrix).to_csv(cm_path, index=False)
-                        mlflow.log_artifact(cm_path)
-                        os.remove(cm_path)  # Clean up
-                except Exception as e:
-                    self.logger.warning(
-                        f"Failed to log confusion matrix for fold {fold_result.fold_index}: {str(e)}"
-                    )
-
-                run_id = mlflow.active_run().info.run_id
-                self.logger.debug(
-                    f"Logged fold {fold_result.fold_index} for {model_name}"
-                )
-                return run_id
+            self.logger.debug(f"Updated fold {fold_result.fold_index} results")
 
         except Exception as e:
             self.logger.warning(
-                f"Failed to log fold {fold_result.fold_index} for {model_name}: {str(e)}"
+                f"Failed to update fold {fold_result.fold_index}: {str(e)}"
             )
-            return None
 
-    def log_model_evaluation(self, model_result: ModelResult) -> Optional[str]:
-        """Log aggregated model evaluation results."""
+    def update_model_run(self, model_result: ModelResult) -> None:
+        """Update model run with current averages after each fold completion."""
         try:
-            # Log model metadata (safe parameters only)
-            if model_result.model_metadata:
-                safe_params = {
-                    k: v
-                    for k, v in model_result.model_metadata.items()
-                    if isinstance(v, (str, int, float, bool))
-                }
-                if safe_params:
-                    mlflow.log_params(safe_params)
+            # Get current metrics (recalculated from all completed folds)
+            current_metrics = model_result.get_mlflow_metrics()
 
-            # Log aggregated performance metrics
-            metrics = model_result.get_mlflow_metrics()
-            if metrics:
-                mlflow.log_metrics(metrics)
+            # Update the model run with current averages
+            mlflow.log_metrics(current_metrics)
 
-            # Log model tags
-            tags = model_result.get_mlflow_tags()
-            for key, value in tags.items():
-                mlflow.set_tag(key, value)
+            # Update fold completion count
+            mlflow.log_metric("folds_completed", len(model_result.fold_results))
 
-            # Log aggregated confusion matrix as artifact
+            # Log aggregated confusion matrix
             if model_result.confusion_matrix is not None:
                 self._log_confusion_matrix(model_result)
 
-            # Log fold stability analysis
+            # Log stability analysis
             self._log_fold_stability_analysis(model_result)
 
+            f1_score = model_result.get_mean_metric("f1_score")
             self.logger.debug(
-                f"Logged aggregated evaluation: {model_result.model_name}"
+                f"Updated model {model_result.model_name} (current f1: {f1_score:.3f})"
             )
-            return mlflow.active_run().info.run_id if mlflow.active_run() else None
 
         except Exception as e:
             self.logger.warning(
-                f"Failed to log aggregated results for {model_result.model_name}: {str(e)}"
+                f"Failed to update model {model_result.model_name}: {str(e)}"
             )
-            return None
+
+    def update_dataset_run(self, dataset_result: DatasetResult) -> None:
+        """Update dataset run with aggregates across all models."""
+        try:
+            if not dataset_result.model_results:
+                return
+
+            # Calculate aggregates across all models
+            f1_scores = [
+                mr.get_mean_metric("f1_score") for mr in dataset_result.model_results
+            ]
+            accuracies = [
+                mr.get_mean_metric("accuracy") for mr in dataset_result.model_results
+            ]
+
+            # Best performing model metrics
+            best_f1 = max(f1_scores) if f1_scores else 0.0
+            best_accuracy = max(accuracies) if accuracies else 0.0
+
+            # Average across all models (to identify easy/hard datasets)
+            avg_f1 = np.mean(f1_scores) if f1_scores else 0.0
+            avg_accuracy = np.mean(accuracies) if accuracies else 0.0
+
+            # Update dataset metrics
+            mlflow.log_metrics(
+                {
+                    "best_f1_score": best_f1,
+                    "best_accuracy": best_accuracy,
+                    "avg_f1_score": avg_f1,
+                    "avg_accuracy": avg_accuracy,
+                    "models_completed": len(dataset_result.model_results),
+                    "f1_score_std": np.std(f1_scores) if f1_scores else 0.0,
+                    "accuracy_std": np.std(accuracies) if accuracies else 0.0,
+                }
+            )
+
+            # Tag dataset difficulty based on average performance
+            difficulty = (
+                "easy" if avg_f1 > 0.8 else "medium" if avg_f1 > 0.6 else "hard"
+            )
+            mlflow.set_tag("dataset_difficulty", difficulty)
+
+            self.logger.debug(
+                f"Updated dataset {dataset_result.dataset_name} (avg f1: {avg_f1:.3f}, difficulty: {difficulty})"
+            )
+
+        except Exception as e:
+            self.logger.warning(
+                f"Failed to update dataset {dataset_result.dataset_name}: {str(e)}"
+            )
+
+    def update_experiment_run(self, experiment_result: ExperimentResult) -> None:
+        """Update experiment run with progress counters."""
+        try:
+            # Count completed datasets and total trained models
+            completed_datasets = len(experiment_result.dataset_results)
+            total_trained_models = sum(
+                len(dr.model_results) for dr in experiment_result.dataset_results
+            )
+
+            # Update progress tags
+            mlflow.set_tags(
+                {
+                    "completed_datasets": str(completed_datasets),
+                    "trained_models": str(total_trained_models),
+                    "status": "running",  # Will be set to "completed" when experiment finishes
+                }
+            )
+
+            self.logger.debug(
+                f"Updated experiment progress: {completed_datasets} datasets, {total_trained_models} models"
+            )
+
+        except Exception as e:
+            self.logger.warning(f"Failed to update experiment progress: {str(e)}")
+
+    def finalize_experiment_run(self, experiment_result: ExperimentResult) -> None:
+        """Finalize experiment run with completion status."""
+        try:
+            # Update final tags
+            mlflow.set_tags(
+                {
+                    "status": "completed",
+                    "finish_time": experiment_result.finish_time,
+                    "total_datasets": str(len(experiment_result.dataset_results)),
+                    "total_trained_models": str(
+                        sum(
+                            len(dr.model_results)
+                            for dr in experiment_result.dataset_results
+                        )
+                    ),
+                }
+            )
+
+            self.logger.info("Finalized experiment run")
+
+        except Exception as e:
+            self.logger.warning(f"Failed to finalize experiment: {str(e)}")
+
+    # ================================
+    # HELPER METHODS
+    # ================================
 
     def _log_fold_stability_analysis(self, model_result: ModelResult) -> None:
         """Log fold stability analysis as metrics and tags."""
         try:
-            # Log stability for key metrics
             for metric_name in ["f1_score", "accuracy", "precision", "recall"]:
-                if metric_name in model_result.mean_metrics:
+                if (
+                    hasattr(model_result, "mean_metrics")
+                    and metric_name in model_result.mean_metrics
+                ):
                     stability = model_result.get_fold_stability(metric_name)
                     mlflow.set_tag(f"{metric_name}_stability", stability)
 
-                    # Log coefficient of variation as a metric
+                    # Log coefficient of variation
                     summary = model_result.get_metric_summary(metric_name)
                     mlflow.log_metric(f"{metric_name}_cv", summary["cv"])
 
@@ -185,13 +306,10 @@ class MLflowManager:
         try:
             pd.DataFrame(model_result.confusion_matrix).to_csv(cm_path, index=False)
             mlflow.log_artifact(cm_path)
-            self.logger.debug(
-                f"Logged aggregated confusion matrix for {model_result.model_name}"
-            )
+            self.logger.debug(f"Logged confusion matrix for {model_result.model_name}")
         except Exception as e:
             self.logger.warning(f"Failed to log confusion matrix: {str(e)}")
         finally:
-            # Clean up temp file
             if os.path.exists(cm_path):
                 os.remove(cm_path)
 
