@@ -35,10 +35,10 @@ def load_model_configs() -> Dict[str, Dict[str, Any]]:
         Combined dictionary of model configurations from sklearn and sktime
     """
     # Load sklearn models
-    with open("src/modeling/sklearn_models.yml", "r") as file:
+    with open("src/models/sklearn_models.yml", "r") as file:
         sklearn_configs = yaml.safe_load(file)
     # Load sktime models
-    with open("src/modeling/sktime_models.yml", "r") as file:
+    with open("src/models/sktime_models.yml", "r") as file:
         sktime_configs = yaml.safe_load(file)
     return {**sklearn_configs, **sktime_configs}
 
