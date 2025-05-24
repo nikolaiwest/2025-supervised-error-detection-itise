@@ -134,28 +134,21 @@ def _get_binary_vs_all_data(
         y_values = np.zeros(len(x_combined), dtype=int)
         y_values[n_normal:] = 1
 
-        # Calculate class ratio and distribution
-        class_ratio = n_normal / n_faulty if n_faulty > 0 else float("inf")
-        class_distribution = {"normal": int(n_normal), "faulty": int(n_faulty)}
-        class_names = {0: "normal", 1: "faulty"}
-
         # Create dataset using standardized format
         dataset = ExperimentDataset(
             name=class_value,
-            experiment_name="binary_vs_all",
             x_values=x_combined,
             y_values=y_values,
-            class_name=class_value,
-            num_classes=2,
-            class_names=class_names,
-            normal_samples=n_normal,
-            faulty_samples=n_faulty,
-            class_distribution=class_distribution,
-            imbalance_ratio=class_ratio,
+            experiment_name="binary_vs_all",
+            class_count=2,  # Binary classification
+            class_names={0: "normal", 1: "faulty"},
+            normal_counts=int(n_normal),
+            faulty_counts=int(n_faulty),
+            faulty_ratio=round(n_faulty / (n_normal + n_faulty), 4),
             description=f"Binary classification of ALL normal samples vs faulty samples for class {class_value}",
         )
 
-        datasets.append(dataset.to_dict())
+        datasets.append(dataset)
 
     return datasets
 
@@ -214,14 +207,8 @@ def _get_multiclass_with_groups(
             if filtered_condition[i] != "normal":
                 y_values[i] = class_mapping[filtered_class_values[i]]
 
-        # Verify we have samples for each class
-        unique_y, counts = np.unique(y_values, return_counts=True)
-        class_distribution = {
-            class_names[y_val]: int(count) for y_val, count in zip(unique_y, counts)
-        }
-
         # Calculate normal and faulty counts
-        n_normal = np.sum(y_values == 0)
+        n_normal = int(np.sum(y_values == 0))
         n_faulty = len(y_values) - n_normal
 
         # Skip if we don't have both normal and faulty samples
@@ -231,21 +218,18 @@ def _get_multiclass_with_groups(
         # Create dataset using standardized format
         dataset = ExperimentDataset(
             name=group_name,
-            experiment_name="multiclass_with_groups",
             x_values=filtered_torque_values,
             y_values=y_values,
-            num_classes=len(group_errors) + 1,  # Normal + all classes in group
-            class_mapping=class_mapping,
+            experiment_name="multiclass_with_groups",
+            class_count=len(group_errors) + 1,  # Normal + all classes in group
             class_names=class_names,
-            normal_samples=n_normal,
-            faulty_samples=n_faulty,
-            class_distribution=class_distribution,
-            imbalance_ratio=n_normal / n_faulty if n_faulty > 0 else float("inf"),
+            normal_counts=n_normal,
+            faulty_counts=n_faulty,
+            faulty_ratio=round(n_faulty / (n_normal + n_faulty), 4),
             description=f"Multi-class classification within error group '{group_name}' (0=normal, 1-{len(group_errors)}=faulty class)",
-            additional_info={"group_errors": group_errors},
         )
 
-        datasets.append(dataset.to_dict())
+        datasets.append(dataset)
 
     # Check if we have any datasets
     if not datasets:
@@ -290,16 +274,9 @@ def _get_multiclass_with_all(
         if scenario_condition[i] != "normal":
             y_values[i] = class_mapping[class_values[i]]
 
-    # Count samples per class for metadata
-    unique_y, counts = np.unique(y_values, return_counts=True)
-    class_distribution = {
-        class_names[y_val]: int(count) for y_val, count in zip(unique_y, counts)
-    }
-
-    # Calculate normal vs faulty ratio for reference
-    n_normal = class_distribution.get("normal", 0)
-    n_faulty = sum(v for k, v in class_distribution.items() if k != "normal")
-    class_ratio = n_normal / n_faulty if n_faulty > 0 else float("inf")
+    # Calculate normal vs faulty ratio
+    n_normal = int(np.sum(y_values == 0))
+    n_faulty = len(y_values) - n_normal
 
     # Final check for at least some samples in both categories
     if n_normal == 0 or n_faulty == 0:
@@ -311,20 +288,18 @@ def _get_multiclass_with_all(
     # Create dataset using standardized format
     dataset = ExperimentDataset(
         name="all_errors",
-        experiment_name="multiclass_with_all",
         x_values=torque_values,
         y_values=y_values,
-        num_classes=len(unique_classes) + 1,  # Normal + all error classes
-        class_mapping=class_mapping,
+        experiment_name="multiclass_with_all",
+        class_count=len(unique_classes) + 1,  # Normal + all error classes
         class_names=class_names,
-        class_distribution=class_distribution,
-        normal_samples=n_normal,
-        faulty_samples=n_faulty,
-        imbalance_ratio=class_ratio,
+        normal_counts=n_normal,
+        faulty_counts=n_faulty,
+        faulty_ratio=round(n_faulty / (n_normal + n_faulty), 4),
         description=f"Multi-class classification with class 0 for normal samples and {len(unique_classes)} classes for different error types",
     )
 
-    return [dataset.to_dict()]  # Return as a list for consistent interface
+    return [dataset]  # Return as a list for consistent interface
 
 
 """
