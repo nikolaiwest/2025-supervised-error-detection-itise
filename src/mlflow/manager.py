@@ -1,4 +1,5 @@
 import os
+import logging
 from typing import Optional
 
 import numpy as np
@@ -21,6 +22,22 @@ class MLflowManager:
     def __init__(self, port: int = 5000):
         self.port = port
         self.logger = get_logger(__name__)
+
+        # Suppress MLflow's verbose logging
+        self._suppress_mlflow_logging()
+
+    def _suppress_mlflow_logging(self):
+        """Suppress MLflow's auto-generated messages."""
+        # Set MLflow logging level to ERROR to suppress INFO messages
+        logging.getLogger("mlflow").setLevel(logging.ERROR)
+        logging.getLogger("mlflow.tracking").setLevel(logging.ERROR)
+        logging.getLogger("mlflow.utils.autologging_utils").setLevel(logging.ERROR)
+
+        # Disable MLflow's run start/end messages via environment variable
+        os.environ["MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING"] = "false"
+
+        # Additional environment variables to suppress MLflow output
+        os.environ["MLFLOW_TRACKING_SILENT"] = "true"
 
     def setup_tracking(self, experiment_name: str) -> None:
         """Initialize MLflow tracking connection."""
@@ -121,8 +138,6 @@ class MLflowManager:
         # Log fold parameters
         mlflow.log_params({"fold_index": fold_index, "fold_type": "cross_validation"})
 
-        self.logger.debug(f"Started fold run: {run_name}")
-
     # ================================
     # UPDATE METHODS - Push results
     # ================================
@@ -147,8 +162,6 @@ class MLflowManager:
             except Exception as e:
                 self.logger.warning(f"Failed to log fold confusion matrix: {str(e)}")
 
-            self.logger.debug(f"Updated fold {fold_result.fold_index} results")
-
         except Exception as e:
             self.logger.warning(
                 f"Failed to update fold {fold_result.fold_index}: {str(e)}"
@@ -172,11 +185,6 @@ class MLflowManager:
 
             # Log stability analysis
             self._log_fold_stability_analysis(model_result)
-
-            f1_score = model_result.get_mean_metric("f1_score")
-            self.logger.debug(
-                f"Updated model {model_result.model_name} (current f1: {f1_score:.3f})"
-            )
 
         except Exception as e:
             self.logger.warning(
@@ -224,10 +232,6 @@ class MLflowManager:
             )
             mlflow.set_tag("dataset_difficulty", difficulty)
 
-            self.logger.debug(
-                f"Updated dataset {dataset_result.dataset_name} (avg f1: {avg_f1:.3f}, difficulty: {difficulty})"
-            )
-
         except Exception as e:
             self.logger.warning(
                 f"Failed to update dataset {dataset_result.dataset_name}: {str(e)}"
@@ -249,10 +253,6 @@ class MLflowManager:
                     "trained_models": str(total_trained_models),
                     "status": "running",  # Will be set to "completed" when experiment finishes
                 }
-            )
-
-            self.logger.debug(
-                f"Updated experiment progress: {completed_datasets} datasets, {total_trained_models} models"
             )
 
         except Exception as e:
@@ -309,7 +309,6 @@ class MLflowManager:
         try:
             pd.DataFrame(model_result.confusion_matrix).to_csv(cm_path, index=False)
             mlflow.log_artifact(cm_path)
-            self.logger.debug(f"Logged confusion matrix for {model_result.model_name}")
         except Exception as e:
             self.logger.warning(f"Failed to log confusion matrix: {str(e)}")
         finally:

@@ -226,7 +226,9 @@ class ExperimentRunner:
 
                     # Log success
                     f1_score = model_result.get_mean_metric("f1_score")
-                    self.logger.info(f"    {model_name}: f1_score = {f1_score:.3f}")
+                    self.logger.info(
+                        f"    {model_name}: f1_score (avg.) = {f1_score:.3f}"
+                    )
 
                 except ModelEvaluationError as e:
                     self.logger.warning(f"    {model_name}: FAILED - {str(e)}")
@@ -258,6 +260,9 @@ class ExperimentRunner:
         model = self.models[model_name]
 
         try:
+            # Log fold processing start
+            self.logger.info(f"    Running {self.cv_folds} folds")
+
             # Process all folds for this model
             fold_index = 0
             for train_idx, test_idx in self.split_method():
@@ -329,9 +334,9 @@ class ExperimentRunner:
             # UPDATE: Update fold run with results
             self.mlflow_manager.update_fold_run(fold_result)
 
-            # Log progress
+            # Log progress with consistent indentation
             f1_score = fold_result.metrics.get("f1_score", 0)
-            self.logger.debug(f"      Fold {fold_index}: f1_score = {f1_score:.3f}")
+            self.logger.info(f"      Fold {fold_index}: f1_score = {f1_score:.3f}")
 
             return fold_result
 
