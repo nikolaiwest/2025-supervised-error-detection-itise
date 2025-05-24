@@ -1,3 +1,2 @@
-from .metrics import evaluate_model
-
-__all__ = ["evaluate_model"]
+from .apply_metrics import apply_metrics
+from .results import FoldResult, ModelResult, DatasetResult, ExperimentResult

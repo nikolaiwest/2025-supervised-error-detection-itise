@@ -23,7 +23,6 @@ from ..utils.exceptions import (
 )
 from .experiment_dataset import ExperimentDataset
 from .sampling import sample_datasets
-from .training import train_single_fold
 
 
 class ExperimentRunner:
