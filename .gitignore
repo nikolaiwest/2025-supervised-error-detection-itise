@@ -1,17 +1,16 @@
-# Project
-/data/
-!/src/data/ 
 tests/
+notes.txt
+
+# Don'track temporary result output (used during development)
 results/**/*.png
-# Temp: dont update csv results with every run...
 results/**/*.csv 
 results/**/*.txt
 scripts/*
 !scripts/*.py
-notes.txt
 
 # Experiment tracking in mlflow
-src/experiments/server/mlartifacts/*
+src/mlflow/artifacts/*
+src/mlflow/database/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
