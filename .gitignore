@@ -7,6 +7,8 @@ results/**/*.csv
 results/**/*.txt
 scripts/*
 !scripts/*.py
+!scripts/*.ipynb
+notes.txt
 
 # Experiment tracking in mlflow
 src/mlflow/artifacts/*

@@ -1,0 +1,58 @@
+{
+  "group_control": [
+    "001_control-group-01"
+  ],
+  "group_1_cooling_time": [
+    "101_cooling-time-25-1",
+    "102_cooling-time-26",
+    "103_cooling-time-27",
+    "104_cooling-time-28",
+    "105_cooling-time-29",
+    "106_cooling-time-30",
+    "107_cooling-time-25-2"
+  ],
+  "group_2_mold_temperature": [
+    "201_mold-temperature-30",
+    "202_mold-temperature-35",
+    "203_mold-temperature-45",
+    "204_mold-temperature-55",
+    "205_mold-temperature-65"
+  ],
+  "group_3_glass_fiber_content": [
+    "301_glass-fiber-content-30",
+    "302_glass-fiber-content-25",
+    "303_glass-fiber-content-20",
+    "304_glass-fiber-content-15",
+    "305_glass-fiber-content-10"
+  ],
+  "group_4_switching_point": [
+    "401_switching-point-22-1",
+    "402_switching-point-20",
+    "403_switching-point-18",
+    "404_switching-point-17",
+    "405_switching-point-16",
+    "406_switching-point-15",
+    "407_switching-point-14",
+    "408_switching-point-13",
+    "409_switching-point-22-2",
+    "410_switching-point-24",
+    "411_switching-point-26",
+    "412_switching-point-28",
+    "413_switching-point-30",
+    "414_switching-point-32"
+  ],
+  "group_5_injection_velocity": [
+    "501_injection-velocity-030-1",
+    "502_injection-velocity-050",
+    "503_injection-velocity-070",
+    "504_injection-velocity-090",
+    "505_injection-velocity-110",
+    "506_injection-velocity-130",
+    "507_injection-velocity-150",
+    "508_injection-velocity-170",
+    "509_injection-velocity-030-2",
+    "510_injection-velocity-025",
+    "511_injection-velocity-020",
+    "512_injection-velocity-015"
+  ]
+}
