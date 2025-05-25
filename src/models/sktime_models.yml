@@ -23,12 +23,12 @@ KNeighborsTimeSeriesClassifier:
     from: sktime.classification.distance_based
     class: KNeighborsTimeSeriesClassifier
 
-ElasticEnsemble:
+ElasticEnsemble:  # De-selected because too slow (~90 min. for 1 model (5 folds) with the 200x100 datasets)
   # Ensemble of nearest neighbor classifiers using elastic distance measures
   # Combines multiple distance metrics (Euclidean, DTW, DDTW, WDTW, etc.)
   # Can be very slow on larger datasets but often accurate
   family: Distance
-  in_sets: [full, sktime]
+  in_sets: []
   params:
     # Distance measures to include in the ensemble
     # More distances = better accuracy but slower training
@@ -117,12 +117,12 @@ CanonicalIntervalForest:
     from: sktime.classification.interval_based
     class: CanonicalIntervalForest
 
-DrCIF:
+DrCIF: # De-selected because too slow (~30 min. for 1 model (5 folds) with the 200x100 datasets)
   # Diverse Representation Canonical Interval Forest
   # An ensemble that combines different representations of time series data
   # Good replacement for ProximityForest with improved performance
   family: Interval
-  in_sets: [full, sktime]
+  in_sets: []
   params:
     # Number of trees in the forest
     n_estimators: 200
@@ -276,6 +276,23 @@ ROCKET:
     from: sktime.classification.kernel_based
     class: RocketClassifier
 
+MiniRocket:
+  # Faster version of ROCKET with fewer kernels and optimized operations
+  # Nearly identical accuracy to ROCKET but ~10x faster
+  # Perfect balance of speed and performance
+  family: Advanced
+  in_sets: [full, sktime]
+  params:
+    # Fewer kernels than regular ROCKET for speed
+    num_kernels: 10000
+    # Use MiniRocket variant for speed
+    rocket_transform: "minirocket"
+    # Auto-detect multivariate data
+    use_multivariate: "auto"
+  import:
+    from: sktime.classification.kernel_based
+    class: RocketClassifier
+
 Arsenal:
   # Combination of ROCKET transforms with ensemble classifiers
   # More accurate than base ROCKET but slower
@@ -296,3 +313,25 @@ Arsenal:
   import:
     from: sktime.classification.kernel_based
     class: Arsenal
+
+###############################################################################
+# FEATURE-BASED MODELS
+###############################################################################
+
+Catch22Classifier:
+  # Extremely fast classifier using 22 canonical time series features
+  # Extracts catch22 features then uses a simple classifier
+  # One of the fastest time series classifiers available
+  family: Feature
+  in_sets: [debug, full, sktime]
+  params:
+    # Normalise each series during the two outlier Catch22 features
+    outlier_norm: false
+    # Replace NaN or inf values from the Catch22 transform with 0
+    replace_nans: true
+    # Estimator to use - None defaults to RandomForestClassifier(n_estimators=200)
+    estimator: null
+    # n_jobs and random_state will be set automatically by your code
+  import:
+    from: sktime.classification.feature_based
+    class: Catch22Classifier

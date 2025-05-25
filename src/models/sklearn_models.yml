@@ -195,7 +195,7 @@ NearestCentroid:
   # Fast but less flexible than other approaches
   # Computes centroid for each class and assigns based on closest centroid
   family: Distance
-  in_sets: [full, sklearn]
+  in_sets: []
   params:
     # Distance metric to use
     metric: "euclidean"
