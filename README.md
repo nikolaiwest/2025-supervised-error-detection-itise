@@ -256,7 +256,7 @@ This research is supported by:
 
 | Organization | Role | 
 |-------------|------|
-| **German Ministry of Education and Research (BMBF)** | Primary funding through "Data competencies for early career researchers" program |
+| **Federal Ministry of Research, Technology and Space (BMFTR)** | Primary funding through "Data competencies for early career researchers" program |
 | **European Union's NextGenerationEU** | Co-funding initiative |
 | **VDIVDE Innovation + Technik GmbH** | Program administration and support |
 
