@@ -10,10 +10,6 @@ scripts/*
 !scripts/*.ipynb
 notes.txt
 
-# Experiment tracking in mlflow
-src/mlflow/artifacts/*
-src/mlflow/database/*
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
