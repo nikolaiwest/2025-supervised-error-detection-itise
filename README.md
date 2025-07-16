@@ -4,7 +4,9 @@
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![MLflow](https://img.shields.io/badge/MLflow-tracking-green.svg)](https://mlflow.org/)
 
-> This repository contains the code and results for our paper **"Multi-class Error Detection in Industrial Screw Driving Operations Using Machine Learning"** *(yet to be)* presented at ITISE 2025 (11th International Conference on Time Series and Forecasting) in Gran Canaria, Spain.
+> This repository contains the code and results for our paper **"Multi-class Error Detection in Industrial Screw Driving Operations Using Machine Learning"** presented at [ITISE 2025](https://itise.ugr.es/) (11th International Conference on Time Series and Forecasting) in Gran Canaria, Spain, on July 16th 2025.
+
+*Please note, I will add a DOI as soon as the proceedings come available online.*
 
 ## 🎯 Abstract
 
@@ -77,6 +79,8 @@ data = pyscrew.get_data("s04")  # Downloads ~2GB of time series data
 print(f"Dataset contains {len(data['torque_values'])} samples")
 print(f"Classes: {set(data['class_values'])}")
 ```
+
+You can find the full raw data on [Zenodo](https://doi.org/10.5281/zenodo.15393134) (see dataset s04 for the experiments in this paper). 
 
 ## 🧪 Experiments
 
@@ -241,7 +245,11 @@ If you use this code or dataset in your research, please cite our paper:
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [contribution guidelines](CONTRIBUTING.md) for details.
+We welcome contributions! If you are interested in using this pipeline in one of your projects, I would like to also refer you to [this repository](https://github.com/institute-of-production-systems/pyscrew-error-detection), where we continue to develop the pipeline (more model support, better mlflow tracking, more preprocessing, etc.). 
+
+> https://github.com/institute-of-production-systems/pyscrew-error-detection 
+
+The aim of the new repository is to provide a general purpose analytics pipeline for your [PyScrew](https://pypi.org/project/pyscrew/) dataset with simplified data sampling and access to dataset-specific rules/conditions for implementation. The purpose of this repository remains to provide full documentation of all steps required for the published ITISE paper. 
 
 ## 📞 Contact
 
